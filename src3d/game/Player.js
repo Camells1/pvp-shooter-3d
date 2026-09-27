@@ -1,5 +1,5 @@
-// Player simulation: movement, collision, weapons state, abilities.
-import { WEAPONS, GRAVITY, SPAWN_PROTECT } from './data.js';
+// Player simulation: movement, collision, loadout, shields and abilities.
+import { weaponById, GRAVITY } from './data.js';
 
 const STEP = 0.62;
 
@@ -12,35 +12,67 @@ export class Player {
     this.pos = { x: 0, y: 0, z: 0 };
     this.vel = { x: 0, y: 0, z: 0 };
     this.yaw = 0; this.pitch = 0;
-    this.kills = 0; this.deaths = 0;
     this.shots = 0; this.hits = 0; this.headshots = 0;
     this.events = [];
-    this.weapon = 0;
-    this.reset([0, 0, 0]);
+    this.inv = { primary: null, sidearm: { id: 'classic', ammo: weaponById('classic').mag } };
+    this.slot = 'sidearm';
+    this.shield = 0;
+    this.frozen = false;
+    this.reset([0, 0, 0], false);
   }
 
-  reset(spawn) {
+  // Start of a round. Survivors keep their loadout and shield.
+  reset(spawn, keepLoadout) {
     this.pos.x = spawn[0]; this.pos.y = spawn[1] + 0.01; this.pos.z = spawn[2];
     this.vel.x = this.vel.y = this.vel.z = 0;
     this.hp = this.char.health;
     this.dead = false;
     this.grounded = false;
-    this.ammo = WEAPONS.map(w => w.mag);
+    if (!keepLoadout) {
+      this.inv = { primary: null, sidearm: { id: 'classic', ammo: weaponById('classic').mag } };
+      this.shield = 0;
+    }
+    for (const k of ['primary', 'sidearm']) if (this.inv[k]) this.inv[k].ammo = weaponById(this.inv[k].id).mag;
+    this.slot = this.inv.primary ? 'primary' : 'sidearm';
     this.fireCd = 0;
     this.reloadT = -1;
     this.abilityCd = 0;
     this.dashT = 0; this.shieldT = 0; this.overclockT = 0;
-    this.protectT = SPAWN_PROTECT;
     this.bloom = 0;
     this.airTime = 0;
-    this.lastFire = false;
   }
 
-  get w() { return WEAPONS[this.weapon]; }
-  get invulnerable() { return this.shieldT > 0 || this.protectT > 0; }
+  get cur() { return this.inv[this.slot] || this.inv.sidearm; }
+  get weaponId() { return this.cur.id; }
+  get w() { return weaponById(this.cur.id); }
+  get invulnerable() { return this.shieldT > 0; }
   get reloadProgress() { return this.reloadT < 0 ? -1 : 1 - this.reloadT / this.w.reload; }
 
   forward() { return { x: -Math.sin(this.yaw), z: -Math.cos(this.yaw) }; }
+
+  // Put a weapon in its slot. Returns what was there before (to drop), if anything.
+  give(id, ammo) {
+    const w = weaponById(id);
+    const prev = this.inv[w.slot];
+    this.inv[w.slot] = { id, ammo: ammo ?? w.mag };
+    this.slot = w.slot;
+    this.reloadT = -1;
+    this.fireCd = Math.max(this.fireCd, 0.3);
+    this.events.push({ type: 'switch' });
+    return prev || null;
+  }
+
+  // Remove the held weapon (for dropping). You always keep at least a sidearm slot.
+  takeHeld() {
+    const s = this.slot;
+    const item = this.inv[s];
+    if (!item) return null;
+    if (s === 'sidearm' && !this.inv.primary) return null; // can't be left empty-handed
+    this.inv[s] = null;
+    this.slot = this.inv.primary ? 'primary' : 'sidearm';
+    this.reloadT = -1;
+    return item;
+  }
 
   spread(ads) {
     const w = this.w;
@@ -51,13 +83,11 @@ export class Player {
     return s;
   }
 
-  // input: { mx, mz, jump, yaw, pitch, fire, ads, reload, weapon, ability }
+  // input: { mx, mz, jump, yaw, pitch, fire, ads, reload, slot, ability }
   update(dt, input, onFire) {
     this.yaw = input.yaw; this.pitch = input.pitch;
-    if (this.protectT > 0) this.protectT -= dt;
     if (this.dead) return;
 
-    // Timers
     this.fireCd -= dt;
     this.abilityCd = Math.max(0, this.abilityCd - dt);
     this.shieldT = Math.max(0, this.shieldT - dt);
@@ -65,35 +95,33 @@ export class Player {
     this.bloom = Math.max(0, this.bloom - dt * 0.12);
 
     // Weapon switch
-    if (input.weapon !== undefined && input.weapon !== this.weapon) {
-      this.weapon = input.weapon;
+    if (input.slot && input.slot !== this.slot && this.inv[input.slot]) {
+      this.slot = input.slot;
       this.reloadT = -1;
       this.fireCd = Math.max(this.fireCd, 0.25);
       this.events.push({ type: 'switch' });
     }
 
+    const cur = this.cur;
     // Reload
     if (this.reloadT >= 0) {
       this.reloadT -= dt * (this.overclockT > 0 ? 4 : 1);
-      if (this.reloadT < 0) { this.ammo[this.weapon] = this.w.mag; this.reloadT = -1; this.events.push({ type: 'reloaded' }); }
-    } else if ((input.reload && this.ammo[this.weapon] < this.w.mag) || (this.ammo[this.weapon] === 0)) {
+      if (this.reloadT < 0) { cur.ammo = this.w.mag; this.reloadT = -1; this.events.push({ type: 'reloaded' }); }
+    } else if (!this.frozen && ((input.reload && cur.ammo < this.w.mag) || cur.ammo === 0)) {
       this.reloadT = this.w.reload;
       this.events.push({ type: 'reload' });
     }
 
     // Fire
-    if (input.fire && this.fireCd <= 0 && this.reloadT < 0 && this.ammo[this.weapon] > 0) {
-      const rate = this.w.rate * (this.overclockT > 0 ? 0.5 : 1);
-      this.fireCd = rate;
-      this.ammo[this.weapon]--;
+    if (!this.frozen && input.fire && this.fireCd <= 0 && this.reloadT < 0 && cur.ammo > 0) {
+      this.fireCd = this.w.rate * (this.overclockT > 0 ? 0.5 : 1);
+      cur.ammo--;
       this.shots++;
-      this.protectT = 0;
       onFire?.(this, input.ads);
       this.bloom = Math.min(0.05, this.bloom + this.w.recoil * 0.25);
     }
 
-    // Ability
-    if (input.ability && this.abilityCd <= 0) this.useAbility(input);
+    if (!this.frozen && input.ability && this.abilityCd <= 0) this.useAbility(input);
 
     this.move(dt, input);
   }
@@ -101,11 +129,10 @@ export class Player {
   useAbility(input) {
     const c = this.char;
     this.abilityCd = c.abilityCd;
+    const f = this.forward();
     if (c.ability === 'dash') {
-      let dx = 0, dz = 0;
-      const f = this.forward(), rx = -f.z, rz = f.x;
-      if (input.mx || input.mz) { dx = f.x * input.mz + rx * input.mx; dz = f.z * input.mz + rz * input.mx; }
-      else { dx = f.x; dz = f.z; }
+      let dx = f.x, dz = f.z;
+      if (input.mx || input.mz) { dx = f.x * input.mz - f.z * input.mx; dz = f.z * input.mz + f.x * input.mx; }
       const l = Math.hypot(dx, dz) || 1;
       this.dashDir = { x: dx / l, z: dz / l };
       this.dashT = 0.2;
@@ -116,23 +143,31 @@ export class Player {
     } else if (c.ability === 'overclock') {
       this.overclockT = 4;
       this.events.push({ type: 'overclock' });
+    } else if (c.ability === 'heal') {
+      this.events.push({ type: 'heal' });
+    } else if (c.ability === 'pulse') {
+      this.events.push({ type: 'pulse' });
+    } else if (c.ability === 'wall') {
+      // Wall 4.5m ahead, perpendicular to the dominant facing axis
+      const hit = this.world.raycast(this.pos.x, this.pos.y + 1, this.pos.z, f.x, 0, f.z, 5);
+      const d = hit ? Math.max(1.4, hit.t - 0.6) : 4.5;
+      const cx = this.pos.x + f.x * d, cz = this.pos.z + f.z * d;
+      const g = this.world.groundBelow(cx, cz, 0.2, this.pos.y + 1.2, 4);
+      const alongX = Math.abs(f.z) > Math.abs(f.x); // facing mostly along z -> wall spans x
+      this.events.push({ type: 'wall', x: cx, y: g > -Infinity ? g : this.pos.y, z: cz, alongX });
     } else if (c.ability === 'blink') {
       const from = { ...this.pos };
-      const f = this.forward();
       const cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
       let dx = f.x * cp, dy = Math.max(-0.3, sp), dz = f.z * cp;
       const l = Math.hypot(dx, dy, dz); dx /= l; dy /= l; dz /= l;
-      const oy = this.pos.y + 1.0;
-      const hit = this.world.raycast(this.pos.x, oy, this.pos.z, dx, dy, dz, 9);
+      const hit = this.world.raycast(this.pos.x, this.pos.y + 1.0, this.pos.z, dx, dy, dz, 9);
       let dist = hit ? Math.max(0, hit.t - this.r - 0.2) : 9;
       let placed = false;
       for (; dist >= 0 && !placed; dist -= 0.5) {
         const tx = this.pos.x + dx * dist, tz = this.pos.z + dz * dist;
         const ty = Math.max(this.pos.y + dy * dist, this.pos.y - 3);
         for (let up = 0; up <= 1.6; up += 0.4) {
-          if (this.world.fits(tx, ty + up, tz, this.r, this.h)) {
-            this.pos.x = tx; this.pos.y = ty + up; this.pos.z = tz; placed = true; break;
-          }
+          if (this.world.fits(tx, ty + up, tz, this.r, this.h)) { this.pos.x = tx; this.pos.y = ty + up; this.pos.z = tz; placed = true; break; }
         }
       }
       this.vel.y = Math.max(this.vel.y, 0);
@@ -143,10 +178,11 @@ export class Player {
   move(dt, input) {
     const c = this.char;
     const f = this.forward(), rx = -f.z, rz = f.x;
-    let wx = f.x * input.mz + rx * input.mx, wz = f.z * input.mz + rz * input.mx;
+    let mx = this.frozen ? 0 : input.mx, mz = this.frozen ? 0 : input.mz;
+    let wx = f.x * mz + rx * mx, wz = f.z * mz + rz * mx;
     const wl = Math.hypot(wx, wz);
     if (wl > 1) { wx /= wl; wz /= wl; }
-    let speed = c.speed * (input.ads ? 0.62 : 1);
+    let speed = c.speed * this.w.moveMul * (input.ads ? 0.62 : 1);
     if (this.reloadT >= 0) speed *= 0.9;
 
     if (this.dashT > 0) {
@@ -156,17 +192,15 @@ export class Player {
       this.vel.y = Math.max(this.vel.y, -1);
     } else {
       const accel = this.grounded ? 70 : 16;
-      const tx = wx * speed, tz = wz * speed;
-      let dvx = tx - this.vel.x, dvz = tz - this.vel.z;
+      let dvx = wx * speed - this.vel.x, dvz = wz * speed - this.vel.z;
       const dl = Math.hypot(dvx, dvz), max = accel * dt;
       if (dl > max) { dvx *= max / dl; dvz *= max / dl; }
-      // In the air, don't bleed momentum when there's no input
       if (!this.grounded && wl < 0.01) { dvx = 0; dvz = 0; }
       this.vel.x += dvx; this.vel.z += dvz;
       this.vel.y -= GRAVITY * dt;
     }
 
-    if (input.jump && this.grounded) {
+    if (input.jump && this.grounded && !this.frozen) {
       this.vel.y = c.jump;
       this.grounded = false;
       this.events.push({ type: 'jump' });
@@ -183,13 +217,24 @@ export class Player {
       this._axis('z', this.vel.z * sdt, wasGrounded);
       this._axis('y', this.vel.y * sdt, wasGrounded);
     }
-    // Snap down stairs/slopes
     if (!this.grounded && wasGrounded && this.vel.y <= 0) {
       const g = this.world.groundBelow(this.pos.x, this.pos.z, this.r * 0.9, this.pos.y, 0.7);
       if (g > -Infinity && this.world.fits(this.pos.x, g, this.pos.z, this.r, this.h)) { this.pos.y = g; this.grounded = true; this.vel.y = 0; }
     }
+    // If something (like an ice wall) spawned on top of us, get out of it
+    if (this.world.overlap(this.pos.x - this.r, this.pos.y + 0.01, this.pos.z - this.r, this.pos.x + this.r, this.pos.y + this.h, this.pos.z + this.r)) this._unstick();
     if (this.grounded && !wasGrounded && fallSpeed < -6) this.events.push({ type: 'land', speed: -fallSpeed });
     if (!this.grounded) this.airTime += dt; else this.airTime = 0;
+  }
+
+  _unstick() {
+    const p = this.pos;
+    for (let r = 0.3; r <= 3; r += 0.3) {
+      for (let a = 0; a < Math.PI * 2; a += Math.PI / 4) {
+        const x = p.x + Math.cos(a) * r, z = p.z + Math.sin(a) * r;
+        if (this.world.fits(x, p.y, z, this.r, this.h)) { p.x = x; p.z = z; return; }
+      }
+    }
   }
 
   _axis(axis, amt, wasGrounded) {
@@ -205,7 +250,6 @@ export class Player {
         this.vel.y = 0;
         return;
       }
-      // Step up onto low obstacles
       const stepH = b.max.y - p.y;
       if ((wasGrounded || this.grounded) && stepH > 0 && stepH <= STEP && this.world.fits(p.x, b.max.y, p.z, r, h)) {
         p.y = b.max.y;
@@ -217,9 +261,18 @@ export class Player {
     }
   }
 
+  // Shield soaks damage first. Returns damage actually dealt (0 if immune).
   takeDamage(dmg) {
-    if (this.dead || this.invulnerable) return false;
-    this.hp = Math.max(0, this.hp - dmg);
-    return true;
+    if (this.dead || this.invulnerable) return 0;
+    const soak = Math.min(this.shield, dmg);
+    this.shield -= soak;
+    const rest = dmg - soak;
+    this.hp = Math.max(0, this.hp - rest);
+    return dmg;
+  }
+
+  heal(n) {
+    if (this.dead) return;
+    this.hp = Math.min(this.char.health, this.hp + n);
   }
 }

@@ -64,12 +64,13 @@ function gunMats(accent) {
 }
 
 // Returns group (+Z forward), with userData.muzzle, grip, fore (Vector3 local points).
-export function buildGun(index, accent = 0xff8800) {
+export const SIDEARMS = new Set(['classic', 'mpistol', 'cannon']);
+export function buildGun(id, accent = 0xff8800) {
   const m = gunMats(accent);
   const g = new THREE.Group();
   const add = (geo, mat, x, y, z, rx = 0) => { const k = mesh(geo, mat, x, y, z, g); k.rotation.x = rx; return k; };
   let muzzle, grip = new THREE.Vector3(0, -0.07, 0), fore;
-  if (index === 0) { // Pistol
+  if (id === 'classic') {
     add(rb(0.05, 0.055, 0.22, 0.012), m.body, 0, 0.035, 0.07);
     add(rb(0.052, 0.012, 0.16, 0.004), m.accent, 0, 0.066, 0.06);
     add(rb(0.044, 0.04, 0.17, 0.01), m.polymer, 0, -0.005, 0.06);
@@ -79,7 +80,27 @@ export function buildGun(index, accent = 0xff8800) {
     add(rb(0.02, 0.02, 0.02, 0.004), m.glow, 0, 0.075, -0.02);
     muzzle = new THREE.Vector3(0, 0.035, 0.22);
     fore = new THREE.Vector3(0.02, -0.075, 0.02);
-  } else if (index === 1) { // SMG
+  } else if (id === 'mpistol') {
+    add(rb(0.052, 0.06, 0.2, 0.012), m.body, 0, 0.035, 0.06);
+    add(rb(0.054, 0.014, 0.12, 0.004), m.accent, 0, 0.07, 0.05);
+    add(rb(0.046, 0.045, 0.16, 0.01), m.polymer, 0, -0.01, 0.05);
+    add(rb(0.042, 0.2, 0.05, 0.01), m.polymer, 0, -0.1, -0.005, 0.18);
+    add(rb(0.03, 0.05, 0.03, 0.006), m.accent, 0, -0.21, -0.025, 0.18);
+    add(cyl(0.016, 0.016, 0.07), m.metal, 0, 0.035, 0.19, Math.PI / 2);
+    add(rb(0.03, 0.06, 0.03, 0.008), m.polymer, 0, -0.03, 0.12);
+    add(rb(0.012, 0.012, 0.012, 0.003), m.glow, 0, 0.08, 0.1);
+    muzzle = new THREE.Vector3(0, 0.035, 0.23);
+    fore = new THREE.Vector3(0, -0.05, 0.12);
+  } else if (id === 'cannon') {
+    add(rb(0.05, 0.07, 0.14, 0.014), m.body, 0, 0.03, 0.0);
+    add(cyl(0.038, 0.038, 0.07, 10), m.metal, 0, 0.025, 0.08, Math.PI / 2);
+    add(cyl(0.02, 0.022, 0.24), m.metal, 0, 0.045, 0.24, Math.PI / 2);
+    add(rb(0.03, 0.02, 0.24, 0.005), m.accent, 0, 0.075, 0.22);
+    add(rb(0.048, 0.12, 0.06, 0.018), m.polymer, 0, -0.06, -0.04, 0.35);
+    add(rb(0.012, 0.018, 0.012, 0.003), m.glow, 0, 0.09, 0.33);
+    muzzle = new THREE.Vector3(0, 0.045, 0.37);
+    fore = new THREE.Vector3(0.02, -0.075, 0.0);
+  } else if (id === 'smg') {
     add(rb(0.065, 0.09, 0.34, 0.015), m.body, 0, 0.02, 0.1);
     add(rb(0.067, 0.02, 0.2, 0.006), m.accent, 0, 0.07, 0.08);
     add(cyl(0.017, 0.017, 0.12), m.metal, 0, 0.03, 0.32, Math.PI / 2);
@@ -91,7 +112,7 @@ export function buildGun(index, accent = 0xff8800) {
     add(rb(0.035, 0.028, 0.004, 0.002), m.glow, 0, 0.105, 0.08);
     muzzle = new THREE.Vector3(0, 0.03, 0.4);
     fore = new THREE.Vector3(0, -0.04, 0.22);
-  } else if (index === 2) { // Shotgun
+  } else if (id === 'shotgun') {
     add(rb(0.07, 0.09, 0.26, 0.015), m.body, 0, 0.02, 0.05);
     add(cyl(0.022, 0.022, 0.5), m.metal, 0, 0.045, 0.42, Math.PI / 2);
     add(cyl(0.018, 0.018, 0.42), m.body, 0, 0.005, 0.38, Math.PI / 2);
@@ -102,7 +123,44 @@ export function buildGun(index, accent = 0xff8800) {
     for (let i = 0; i < 4; i++) add(rb(0.074, 0.012, 0.012, 0.003), m.glow, 0, 0.0, -0.02 + i * 0.03);
     muzzle = new THREE.Vector3(0, 0.045, 0.68);
     fore = new THREE.Vector3(0, -0.02, 0.36);
-  } else { // Marksman rifle
+  } else if (id === 'ar') {
+    add(rb(0.066, 0.1, 0.36, 0.015), m.body, 0, 0.02, 0.08);
+    add(rb(0.07, 0.075, 0.26, 0.02), m.polymer, 0, 0.025, 0.36);
+    for (let i = 0; i < 4; i++) add(rb(0.072, 0.012, 0.03, 0.004), m.accent, 0, 0.055, 0.27 + i * 0.06);
+    add(cyl(0.015, 0.015, 0.16), m.metal, 0, 0.03, 0.56, Math.PI / 2);
+    add(cyl(0.022, 0.022, 0.05), m.body, 0, 0.03, 0.64, Math.PI / 2);
+    const mag = add(rb(0.04, 0.17, 0.07, 0.012), m.polymer, 0, -0.1, 0.13); mag.rotation.x = 0.25;
+    add(rb(0.042, 0.1, 0.05, 0.012), m.polymer, 0, -0.07, -0.03, 0.3);
+    add(rb(0.05, 0.09, 0.24, 0.02), m.polymer, 0, -0.01, -0.2, -0.06);
+    add(rb(0.05, 0.05, 0.08, 0.01), m.body, 0, 0.1, 0.06);
+    add(rb(0.03, 0.026, 0.004, 0.002), m.glow, 0, 0.11, 0.1);
+    muzzle = new THREE.Vector3(0, 0.03, 0.67);
+    fore = new THREE.Vector3(0, -0.03, 0.34);
+  } else if (id === 'scout') {
+    add(rb(0.06, 0.09, 0.34, 0.015), m.body, 0, 0.02, 0.08);
+    add(rb(0.064, 0.05, 0.3, 0.015), m.accent, 0, -0.01, 0.34);
+    add(cyl(0.014, 0.014, 0.4), m.metal, 0, 0.035, 0.6, Math.PI / 2);
+    add(cyl(0.024, 0.024, 0.18), m.body, 0, 0.1, 0.08, Math.PI / 2);
+    add(cyl(0.021, 0.021, 0.004), m.glow, 0, 0.1, 0.171, Math.PI / 2);
+    add(rb(0.04, 0.1, 0.05, 0.012), m.polymer, 0, -0.065, -0.02, 0.3);
+    add(rb(0.05, 0.08, 0.26, 0.02), m.accent, 0, -0.01, -0.2, -0.08);
+    add(rb(0.035, 0.08, 0.05, 0.01), m.polymer, 0, -0.06, 0.1);
+    muzzle = new THREE.Vector3(0, 0.035, 0.8);
+    fore = new THREE.Vector3(0, -0.04, 0.34);
+  } else if (id === 'lmg') {
+    add(rb(0.09, 0.12, 0.42, 0.02), m.body, 0, 0.02, 0.08);
+    add(rb(0.092, 0.03, 0.3, 0.01), m.accent, 0, 0.09, 0.1);
+    add(rb(0.12, 0.12, 0.12, 0.02), m.polymer, 0.02, -0.08, 0.1);
+    add(rb(0.02, 0.04, 0.2, 0.008), m.metal, 0, 0.12, 0.08);
+    add(cyl(0.024, 0.024, 0.4), m.metal, 0, 0.03, 0.48, Math.PI / 2);
+    add(cyl(0.034, 0.03, 0.06), m.body, 0, 0.03, 0.7, Math.PI / 2);
+    for (const s of [1, -1]) { const leg = add(rb(0.012, 0.16, 0.012, 0.004), m.metal, 0.03 * s, -0.04, 0.58); leg.rotation.x = -0.9; leg.rotation.z = 0.25 * s; }
+    add(rb(0.045, 0.11, 0.055, 0.012), m.polymer, 0, -0.07, -0.05, 0.3);
+    add(rb(0.06, 0.1, 0.24, 0.025), m.polymer, 0, -0.01, -0.24, -0.06);
+    for (let i = 0; i < 5; i++) add(rb(0.094, 0.01, 0.01, 0.003), m.glow, 0, 0.04, -0.05 + i * 0.05);
+    muzzle = new THREE.Vector3(0, 0.03, 0.73);
+    fore = new THREE.Vector3(0, -0.03, 0.34);
+  } else { // sniper
     add(rb(0.065, 0.095, 0.4, 0.015), m.body, 0, 0.02, 0.1);
     add(rb(0.067, 0.025, 0.28, 0.008), m.accent, 0, -0.02, 0.18);
     add(cyl(0.016, 0.016, 0.46), m.metal, 0, 0.035, 0.52, Math.PI / 2);
@@ -157,9 +215,9 @@ export class CharacterModel {
     this.recoil = 0;
     this.flash = 0;
     this.time = Math.random() * 10;
-    this.weaponIndex = -1;
+    this.weaponId = null;
     this._build();
-    this.setWeapon(0);
+    this.setWeapon('classic');
   }
 
   _build() {
@@ -246,7 +304,7 @@ export class CharacterModel {
     this.root.add(this.shield);
 
     this.allMats = Object.values(this.mats);
-    for (const mat of this.allMats) mat.userData.baseEmissive = mat.emissiveIntensity ?? 0;
+    for (const mat of this.allMats) { mat.userData.baseEmissive = mat.emissiveIntensity ?? 0; if (mat.emissive) mat.userData.baseColor = mat.emissive.clone(); }
   }
 
   _buildHead(head, neck, chest, pack) {
@@ -290,6 +348,39 @@ export class CharacterModel {
       this.cape.position.set(0, 0.34, -0.27);
       chest.add(this.cape);
       this.mats.cape = this.cape.material;
+    } else if (id === 'frost') {
+      mesh(sph(0.15), M.armor, 0, 0.02, 0, head).scale.set(1, 1.08, 1.05);
+      mesh(rb(0.23, 0.07, 0.09, 0.03), M.visor, 0, 0.0, 0.115, head);
+      mesh(rb(0.2, 0.014, 0.02, 0.006), M.glow, 0, 0.0, 0.16, head);
+      const ice = new THREE.MeshPhysicalMaterial({ color: 0xbff0ff, emissive: 0x6fd3ff, emissiveIntensity: 0.6, roughness: 0.05, metalness: 0, transmission: 0.3, transparent: true, opacity: 0.9 });
+      this.mats.ice = ice;
+      const shard = (x, y, z, s2, rz, parent) => { const k = mesh(new THREE.OctahedronGeometry(s2, 0), ice, x, y, z, parent); k.scale.set(0.6, 1.6, 0.6); k.rotation.z = rz; return k; };
+      shard(0, 0.19, -0.02, 0.06, 0, head);
+      shard(0.08, 0.16, -0.02, 0.045, -0.5, head);
+      shard(-0.08, 0.16, -0.02, 0.045, 0.5, head);
+      for (const s2 of [1, -1]) { shard(0.3 * s2, 0.45, -0.02, 0.06, -0.4 * s2, chest); shard(0.24 * s2, 0.48, -0.06, 0.045, -0.2 * s2, chest); }
+      mesh(cyl(0.07, 0.07, 0.3, 8), ice, 0, 0.02, -0.1, pack);
+    } else if (id === 'nova') {
+      mesh(sph(0.145), M.armor, 0, 0.01, 0, head).scale.set(1, 1.02, 1.08);
+      mesh(rb(0.22, 0.08, 0.09, 0.035), M.visor, 0, 0.0, 0.105, head);
+      // Medical cross on forehead and pack
+      mesh(rb(0.07, 0.02, 0.01, 0.004), M.glow, 0, 0.1, 0.14, head);
+      mesh(rb(0.02, 0.07, 0.01, 0.004), M.glow, 0, 0.1, 0.14, head);
+      const halo = mesh(tor(0.17, 0.01), M.glow, 0, 0.24, -0.02, head); halo.rotation.x = Math.PI / 2 - 0.25;
+      mesh(rb(0.14, 0.04, 0.02, 0.008), M.glow, 0, 0.02, -0.075, pack);
+      mesh(rb(0.04, 0.14, 0.02, 0.008), M.glow, 0, 0.02, -0.075, pack);
+      for (const s2 of [1, -1]) mesh(cyl(0.035, 0.035, 0.26, 10), M.armorDark, 0.13 * s2, 0.0, -0.02, pack);
+    } else if (id === 'echo') {
+      mesh(sph(0.148), M.armorDark, 0, 0.01, 0, head).scale.set(1, 1.05, 1.1);
+      mesh(rb(0.22, 0.1, 0.06, 0.04), M.armor, 0, 0.0, 0.1, head);
+      mesh(sph(0.035, 14, 10), M.glow, 0, 0.0, 0.14, head);
+      mesh(tor(0.05, 0.008), M.trim, 0, 0.0, 0.135, head);
+      mesh(cyl(0.006, 0.006, 0.26), M.trim, -0.1, 0.2, -0.04, head).rotation.z = 0.3;
+      mesh(sph(0.018, 10, 8), M.glow, -0.14, 0.33, -0.04, head);
+      // Radar dish on the back
+      const dish = mesh(sph(0.12, 16, 8, 0, Math.PI * 2, 0, Math.PI * 0.35), M.trim, 0, 0.18, -0.1, pack);
+      dish.rotation.x = -Math.PI / 2 - 0.4; dish.material = M.trim;
+      mesh(sph(0.02, 10, 8), M.glow, 0, 0.2, -0.16, pack);
     } else { // volt
       mesh(sph(0.145), M.armor, 0, 0.01, 0, head).scale.set(1, 1, 1.08);
       mesh(rb(0.22, 0.09, 0.1, 0.04), M.visor, 0, 0.0, 0.1, head);
@@ -310,14 +401,15 @@ export class CharacterModel {
     }
   }
 
-  setWeapon(i) {
-    if (i === this.weaponIndex) return;
-    this.weaponIndex = i;
+  setWeapon(id) {
+    if (id === this.weaponId) return;
+    this.weaponId = id;
     if (this.gun) this.gunMount.remove(this.gun);
-    this.gun = buildGun(i, this.char.accent);
+    this.gun = buildGun(id, this.char.accent);
     this.gunMount.add(this.gun);
-    // Pistol held closer to center
-    this.gunBase.set(i === 0 ? -0.07 : -0.13, i === 0 ? 0.16 : 0.13, i === 0 ? 0.36 : 0.28);
+    // Sidearms are held closer to the chest
+    const side = SIDEARMS.has(id);
+    this.gunBase.set(side ? -0.07 : -0.13, side ? 0.16 : 0.13, side ? 0.36 : 0.28);
   }
 
   // Muzzle world position (after updateMatrixWorld)
@@ -432,7 +524,7 @@ export class CharacterModel {
       if (!mat.emissive) continue;
       if (mat.userData.baseEmissive === undefined) mat.userData.baseEmissive = mat.emissiveIntensity;
       if (this.flash > 0) { mat.userData.flashing = true; mat.emissiveIntensity = mat === this.mats.glow ? mat.userData.baseEmissive + this.flash : 0.35 * this.flash; if (mat !== this.mats.glow) mat.emissive.setRGB(1, 0.3, 0.25); }
-      else if (mat.userData.flashing) { mat.userData.flashing = false; mat.emissiveIntensity = mat.userData.baseEmissive; if (mat !== this.mats.glow) mat.emissive.set(mat === this.mats.visor ? this.char.accent : 0x000000); }
+      else if (mat.userData.flashing) { mat.userData.flashing = false; mat.emissiveIntensity = mat.userData.baseEmissive; mat.emissive.copy(mat.userData.baseColor); }
     }
 
     // Death: topple backwards and sink

@@ -305,10 +305,145 @@ function canyon() {
   };
 }
 
+function harbor() {
+  const B = new Builder();
+  B.box(-46, -3, -27, 46, 0, 27, 'concrete');
+  B.sym(-46, 0, 26.6, 46, 0.4, 27, 'metal');
+  // Water (deco) all around the dock
+  const water = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.MeshStandardMaterial({ color: 0x1b4a66, roughness: 0.12, metalness: 0.35 }));
+  water.rotation.x = -Math.PI / 2; water.position.y = -1.4; water.receiveShadow = true; B.deco(water);
+
+  // Spawn warehouses (west, mirrored east) with two front doors
+  B.sym(-46, 0, -12.5, -45, 8, 12.5, 'wall');
+  B.sym(-46, 0, -12.5, -34, 8, -12, 'wall');
+  B.sym(-46, 0, 12, -34, 8, 12.5, 'wall');
+  B.sym(-34.5, 0, -12, -34, 8, -9, 'wall');
+  B.sym(-34.5, 0, -5, -34, 8, 5, 'wall');
+  B.sym(-34.5, 0, 9, -34, 8, 12, 'wall');
+  B.sym(-34.5, 3.6, -9, -34, 8, -5, 'wall');
+  B.sym(-34.5, 3.6, 5, -34, 8, 9, 'wall');
+  B.sym(-46, 8, -12.5, -34, 8.4, 12.5, 'metal');
+  B.sym(-44, 0, -11, -42.8, 1.2, -9.8, 'crate');
+  B.sym(-44, 0, 9.8, -42.8, 1.2, 11, 'crate');
+  B.sym(-37.5, 0, -1.5, -36.3, 1.2, 1.5, 'crate');
+  lamp(B, -40, 7.6, 0, 0xffe0b0, true, 30);
+  lamp(B, 40, 7.6, 0, 0xffe0b0, true, 30);
+
+  // Container yard
+  B.sym(-28, 0, -20, -22, 2.6, -17.5, 'container', { tint: 0xc0402c });
+  B.sym(-28, 0, -17.5, -22, 2.6, -15, 'container', { tint: 0x2e64c4 });
+  B.sym(-24, 0, 4, -21.5, 2.6, 10, 'container', { tint: 0x2f8a4a });
+  B.sym(-16, 0, -10, -13.5, 2.6, -4, 'container', { tint: 0xd97a1f });
+  B.sym(-14, 0, 14, -8, 2.6, 16.5, 'container', { tint: 0x2e64c4 });
+  B.sym(-14, 2.6, 14, -8, 5.2, 16.5, 'container', { tint: 0xc0402c });
+  B.stairs(-8, 14, -2, 16.5, 0, 5.2, '-x', 'metal', true);
+  B.box(-3, 0, -1.3, 3, 2.6, 1.3, 'container', { tint: 0xe0b42a });
+  B.sym(-4.4, 0, -2.6, -3.2, 1.2, -1.4, 'crate');
+  B.sym(-10.5, 0, 2, -9.5, 1.3, 6, 'metal');
+  B.sym(-30.5, 0, -4, -29.3, 1.2, -2.8, 'crate');
+  B.sym(-19.2, 0, 19, -18, 1.2, 20.2, 'crate');
+  B.sym(-19, 1.2, 19.2, -18, 2.2, 20.2, 'crate');
+  B.sym(-12.2, 0, -21, -11, 1.2, -19.8, 'crate');
+  B.sym(-30, 0, 16, -27.5, 2.6, 22, 'container', { tint: 0x7a3fb0 });
+  B.sym(-22, 0, -2, -20.8, 1.2, -0.8, 'crate');
+
+  // Gantry crane
+  for (const z of [-24, -18]) B.sym(-6.5, 0, z - 0.5, -5.5, 12, z + 0.5, 'metal');
+  B.sym(-6.5, 12, -25, -5.5, 13, -17, 'metal', { deco: true });
+  B.box(-6.5, 12.5, -22, 6.5, 13.2, -20, 'metal', { deco: true });
+  B.box(-6.5, 12.5, 20, 6.5, 13.2, 22, 'metal', { deco: true });
+
+  // Ship hulls out on the water (deco)
+  B.box(-40, -4, 36, 20, 6, 50, 'metal', { deco: true, tint: 0x8a2a2a, shadow: false });
+  B.box(-10, 6, 38, 10, 14, 48, 'wall', { deco: true, shadow: false });
+  B.box(-20, -4, -50, 40, 5, -36, 'metal', { deco: true, tint: 0x2a4a8a, shadow: false });
+  for (const x of [-24, 0, 24]) for (const z of [-25.5, 25.5]) lamp(B, x, 6, z, 0xffe0b0, false);
+
+  return {
+    name: 'Harbor', B,
+    bounds: { minX: -45.5, maxX: 45.5, minZ: -26.5, maxZ: 26.5, maxY: 8 },
+    killY: -5,
+    spawns: [[-40, 0, -7], [-40, 0, 7], [-42, 0, -4], [-42, 0, 4]],
+    pickups: [[-18, 0, 0], [0, 0, -21]],
+    env: { top: 0x5a7fa8, bottom: 0xf2c38a, fog: [0xa9a39a, 60, 230], sun: [-0.3, 0.55, 0.6], sunColor: 0xffd6a0, sunI: 2.7, hemi: [0xb8ccff, 0x6a5a48, 1.25], exposure: 1.0, sunAmt: 1 }
+  };
+}
+
+function citadel() {
+  const B = new Builder();
+  const stone = 0xdcc29a, dark = 0xb89a78;
+  B.box(-44, -1, -30, 44, 0, 30, 'floorTiles', { tint: stone });
+  B.sym(-44, 0, 28, 44, 10, 30, 'wall', { tint: dark });
+  B.sym(-44, 0, -28, -42, 10, 28, 'wall', { tint: dark });
+
+  // Spawn courtyard walls with three gates
+  B.sym(-32.5, 0, -28, -32, 6, -16, 'wall', { tint: dark });
+  B.sym(-32.5, 0, -12, -32, 6, -2, 'wall', { tint: dark });
+  B.sym(-32.5, 0, 2, -32, 6, 12, 'wall', { tint: dark });
+  B.sym(-32.5, 0, 16, -32, 6, 28, 'wall', { tint: dark });
+
+  // Raised central plaza with stairs on all four sides
+  B.box(-10, 0, -10, 10, 2.4, 10, 'concrete', { tint: stone });
+  B.stairs(-14, -3, -10, 3, 0, 2.4, '+x', 'concrete', true);
+  B.stairs(-3, 10, 3, 14, 0, 2.4, '-z', 'concrete', true);
+  B.box(-1.3, 2.4, -1.3, 1.3, 6.5, 1.3, 'wall', { tint: dark });
+  B.sym(-8, 2.4, -8, -7, 6.5, -7, 'wall', { tint: dark });
+  B.sym(-8, 2.4, 7, -7, 6.5, 8, 'wall', { tint: dark });
+  B.sym(-10, 2.4, -10, -4, 3.3, -9.6, 'concrete', { tint: dark });
+  B.sym(4, 2.4, -10, 10, 3.3, -9.6, 'concrete', { tint: dark });
+  B.sym(-10, 2.4, -9.6, -9.6, 3.3, -4, 'concrete', { tint: dark });
+  B.sym(-10, 2.4, 4, -9.6, 3.3, 9.6, 'concrete', { tint: dark });
+
+  // Colonnade + upper walkway along the north wall (mirrored south)
+  for (let x = -26; x <= 26; x += 6.5) B.sym(x - 0.5, 0, 20.5, x + 0.5, 3.3, 21.5, 'wall', { tint: stone });
+  B.sym(-26, 3.3, 20.5, 26, 3.6, 28, 'concrete', { tint: stone });
+  B.stairs(-30, 23, -26, 28, 0, 3.6, '+x', 'concrete', true);
+  B.sym(-26, 3.6, 20.4, -8, 4.5, 20.8, 'concrete', { tint: dark });
+  B.sym(8, 3.6, 20.4, 26, 4.5, 20.8, 'concrete', { tint: dark });
+
+  // Mid-lane cover
+  B.sym(-22, 0, -14, -21, 2.2, -8, 'wall', { tint: dark });
+  B.sym(-18, 0, 6, -12, 2.2, 7, 'wall', { tint: dark });
+  B.sym(-26, 0, -4, -24.5, 3, -2.5, 'wall', { tint: stone });
+  B.sym(-20, 0, 0, -18.8, 1.2, 1.2, 'crate');
+  B.sym(-16, 0, -20, -14.8, 1.2, -18.8, 'crate');
+  B.sym(-28, 0, 8, -26.8, 1.2, 9.2, 'crate');
+  B.sym(-36, 0, -1.5, -35, 1.4, 1.5, 'wall', { tint: stone });
+
+  // Braziers
+  const fire = new THREE.MeshStandardMaterial({ color: 0x111111, emissive: 0xff7a2a, emissiveIntensity: 3 });
+  const bowlMat = new THREE.MeshStandardMaterial({ color: 0x3a2a1a, metalness: 0.6, roughness: 0.5 });
+  for (const [x, z] of [[-9, -9], [9, 9], [-9, 9], [9, -9]]) {
+    const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.25, 0.4, 12), bowlMat);
+    bowl.position.set(x, 3.6, z); B.deco(bowl);
+    const f = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.6, 8), fire); f.position.set(x, 4.05, z); B.deco(f);
+    const l = new THREE.PointLight(0xff8a3a, 30, 14, 1.6); l.position.set(x, 4.6, z); B.deco(l);
+  }
+  // Distant mountains
+  let s = 11;
+  const r = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 24; i++) {
+    const a = r() * Math.PI * 2, dist = 110 + r() * 120, w = 30 + r() * 40, h = 20 + r() * 50;
+    const cx = Math.cos(a) * dist, cz = Math.sin(a) * dist;
+    B.box(cx - w / 2, -20, cz - w / 2, cx + w / 2, h, cz + w / 2, 'rock', { deco: true, shadow: false });
+  }
+
+  return {
+    name: 'Citadel', B,
+    bounds: { minX: -41.5, maxX: 41.5, minZ: -27.5, maxZ: 27.5, maxY: 8 },
+    killY: -10,
+    spawns: [[-38, 0, -5], [-38, 0, 5], [-40, 0, -12], [-40, 0, 12]],
+    pickups: [[0, 2.4, 5], [-20, 3.6, 25]],
+    env: { top: 0x2b2f5a, bottom: 0xf08a5a, fog: [0x6a4a4a, 55, 240], sun: [0.7, 0.35, -0.3], sunColor: 0xffa070, sunI: 2.5, hemi: [0x8a90d0, 0x5a3a2a, 1.25], exposure: 1.05, sunAmt: 1 }
+  };
+}
+
 export const MAPS = [
-  { id: 0, name: 'Foundry', desc: 'Warehouse at sunset. Catwalks, containers, close quarters.', build: foundry },
-  { id: 1, name: 'Skyline', desc: 'Rooftop at night. Neon, long sightlines. Don\'t fall.', build: skyline },
-  { id: 2, name: 'Canyon', desc: 'Desert canyon split by a chasm. Cross the bridges.', build: canyon }
+  { id: 0, name: 'Foundry', size: 'Small', desc: 'Warehouse at sunset. Catwalks, containers, close quarters.', build: foundry },
+  { id: 1, name: 'Skyline', size: 'Small', desc: "Rooftop at night. Neon, long sightlines. Don't fall.", build: skyline },
+  { id: 2, name: 'Canyon', size: 'Small', desc: 'Desert canyon split by a chasm. Cross the bridges.', build: canyon },
+  { id: 3, name: 'Harbor', size: 'Large', desc: 'Container yard between two warehouses. Stack up for high ground.', build: harbor },
+  { id: 4, name: 'Citadel', size: 'Large', desc: 'Temple at dusk. Fight for the raised plaza.', build: citadel }
 ];
 
 // Build a full map: scene objects + collision world + nav graph.
@@ -330,7 +465,8 @@ export function buildMap(index, scene, quality) {
   const sm = quality === 'high' ? 4096 : 2048;
   sun.shadow.mapSize.set(sm, sm);
   const c = sun.shadow.camera;
-  c.left = -40; c.right = 40; c.top = 40; c.bottom = -40; c.near = 1; c.far = 160;
+  const ext = Math.max(def.bounds.maxX, def.bounds.maxZ) + 8;
+  c.left = -ext; c.right = ext; c.top = ext; c.bottom = -ext; c.near = 1; c.far = 200;
   sun.shadow.bias = -0.0004;
   sun.shadow.normalBias = 0.03;
   scene.add(sun, sun.target);
@@ -339,13 +475,14 @@ export function buildMap(index, scene, quality) {
   world.buildNav(def.bounds);
 
   // Mirror spawns / pickups for the other side
-  const spawns = [];
-  for (const p of def.spawns) spawns.push(p, [-p[0], p[1], -p[2]]);
+  // Team 0 spawns west (x<0), team 1 gets the point-mirrored spots east.
+  const teamSpawns = [def.spawns, def.spawns.map(p => [-p[0], p[1], -p[2]])];
+  const spawns = [...teamSpawns[0], ...teamSpawns[1]];
   const pickups = [];
   for (const p of def.pickups) {
     pickups.push(p);
     if (p[0] !== 0 || p[2] !== 0) pickups.push([-p[0], p[1], -p[2]]);
   }
 
-  return { name: def.name, group: B.group, sky, world, spawns, pickups, killY: def.killY, bounds: def.bounds, env, lights: [hemi, sun] };
+  return { name: def.name, group: B.group, sky, world, spawns, teamSpawns, pickups, killY: def.killY, bounds: def.bounds, env, lights: [hemi, sun] };
 }

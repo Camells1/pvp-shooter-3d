@@ -39,18 +39,25 @@ function tone(dest, t, dur, f0, f1, type = 'sine', vol = 1) {
   o.connect(g); g.connect(dest); o.start(t); o.stop(t + dur + 0.02);
 }
 
-const GUNS = [
-  (d, t) => { noise(d, t, 0.18, 3000, 300, 0.7, 'lowpass', 1.1); tone(d, t, 0.12, 180, 50, 'triangle', 0.9); noise(d, t, 0.04, 6000, 3000, 1, 'highpass', 0.6); },
-  (d, t) => { noise(d, t, 0.1, 4000, 500, 0.6, 'lowpass', 0.9); tone(d, t, 0.07, 220, 70, 'square', 0.25); },
-  (d, t) => { noise(d, t, 0.45, 2000, 120, 0.5, 'lowpass', 1.6); tone(d, t, 0.25, 110, 35, 'sine', 1.2); noise(d, t + 0.35, 0.06, 1800, 1200, 4, 'bandpass', 0.5); noise(d, t + 0.45, 0.05, 1400, 1000, 4, 'bandpass', 0.5); },
-  (d, t) => { noise(d, t, 0.6, 5000, 150, 0.6, 'lowpass', 1.5); tone(d, t, 0.3, 140, 40, 'triangle', 1.2); noise(d, t, 0.9, 900, 200, 0.4, 'lowpass', 0.4); }
-];
+const pistol = (d, t) => { noise(d, t, 0.18, 3000, 300, 0.7, 'lowpass', 1.1); tone(d, t, 0.12, 180, 50, 'triangle', 0.9); noise(d, t, 0.04, 6000, 3000, 1, 'highpass', 0.6); };
+const smg = (d, t) => { noise(d, t, 0.1, 4000, 500, 0.6, 'lowpass', 0.9); tone(d, t, 0.07, 220, 70, 'square', 0.25); };
+const GUNS = {
+  classic: pistol,
+  mpistol: (d, t) => { noise(d, t, 0.08, 4500, 700, 0.6, 'lowpass', 0.8); tone(d, t, 0.05, 260, 90, 'square', 0.2); },
+  cannon: (d, t) => { noise(d, t, 0.4, 3500, 150, 0.6, 'lowpass', 1.5); tone(d, t, 0.22, 120, 40, 'triangle', 1.2); noise(d, t, 0.05, 7000, 3000, 1, 'highpass', 0.7); },
+  smg,
+  shotgun: (d, t) => { noise(d, t, 0.45, 2000, 120, 0.5, 'lowpass', 1.6); tone(d, t, 0.25, 110, 35, 'sine', 1.2); noise(d, t + 0.35, 0.06, 1800, 1200, 4, 'bandpass', 0.5); noise(d, t + 0.45, 0.05, 1400, 1000, 4, 'bandpass', 0.5); },
+  ar: (d, t) => { noise(d, t, 0.16, 3800, 250, 0.6, 'lowpass', 1.2); tone(d, t, 0.1, 160, 50, 'triangle', 0.8); noise(d, t, 0.03, 7000, 4000, 1, 'highpass', 0.5); },
+  scout: (d, t) => { noise(d, t, 0.45, 4500, 200, 0.6, 'lowpass', 1.3); tone(d, t, 0.25, 150, 45, 'triangle', 1.0); },
+  sniper: (d, t) => { noise(d, t, 0.6, 5000, 150, 0.6, 'lowpass', 1.5); tone(d, t, 0.3, 140, 40, 'triangle', 1.2); noise(d, t, 0.9, 900, 200, 0.4, 'lowpass', 0.4); },
+  lmg: (d, t) => { noise(d, t, 0.13, 3000, 300, 0.6, 'lowpass', 1.2); tone(d, t, 0.09, 140, 50, 'square', 0.3); }
+};
 
 export const sfx = {
   gun(i, dist = 0, pan = 0) {
     if (!ctx) return;
     const g = Math.max(0.08, 1 / (1 + dist * 0.08));
-    GUNS[i](out(0.55 * g, pan), ctx.currentTime);
+    (GUNS[i] || pistol)(out(0.55 * g, pan), ctx.currentTime);
   },
   hit(head) { if (!ctx) return; const d = out(0.35); tone(d, ctx.currentTime, 0.08, head ? 1900 : 1300, head ? 2400 : 1100, 'square', 0.35); if (head) tone(d, ctx.currentTime + 0.05, 0.12, 2600, 2600, 'sine', 0.4); },
   hurt() { if (!ctx) return; const d = out(0.5); noise(d, ctx.currentTime, 0.15, 900, 200, 1, 'lowpass', 0.8); tone(d, ctx.currentTime, 0.12, 160, 90, 'sawtooth', 0.25); },

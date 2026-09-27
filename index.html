@@ -21,22 +21,24 @@
   <div id="ui">
     <!-- MAIN MENU -->
     <section class="screen" id="s-main">
-      <div class="main-left">
+      <div class="main-top">
         <div class="logo"><span class="l1">PVP</span><span class="l2">SHOOTER</span><span class="l3">3D</span></div>
-        <div class="tag">1v1 · PEER-TO-PEER · NO SERVER</div>
+        <div class="tag">1v1 · 2v2 · ROUND-BASED · PEER-TO-PEER</div>
+      </div>
+      <div class="main-bottom">
         <label class="name-field">CALLSIGN <input id="name" maxlength="14" spellcheck="false" /></label>
-        <div class="menu-buttons">
-          <button class="btn big green" data-act="bot">Play vs Bot</button>
+        <div class="main-row">
+          <button class="btn big green" data-act="bot">Play vs Bots</button>
           <button class="btn big cyan" data-act="host">Host Online</button>
           <button class="btn big pink" data-act="join">Join Online</button>
-          <div class="row">
-            <button class="btn" data-act="settings">Settings</button>
-            <button class="btn" data-act="controls">Controls</button>
-            <button class="btn electron-only" data-act="quit">Quit</button>
-          </div>
+        </div>
+        <div class="main-row small">
+          <button class="btn" data-act="settings">Settings</button>
+          <button class="btn" data-act="controls">Controls</button>
+          <button class="btn electron-only" data-act="quit">Quit</button>
         </div>
       </div>
-      <div class="version">v2.0.0</div>
+      <div class="version">v2.1.0</div>
     </section>
 
     <!-- CONTROLS -->
@@ -51,7 +53,10 @@
           <kbd>Space</kbd><span>Jump</span>
           <kbd>Shift</kbd><span>Ability</span>
           <kbd>R</kbd><span>Reload</span>
-          <kbd>1–4 · Q / E · Wheel</kbd><span>Switch weapon</span>
+          <kbd>1 / 2 · Q · Wheel</kbd><span>Primary / sidearm / last weapon</span>
+          <kbd>B</kbd><span>Buy menu (buy phase)</span>
+          <kbd>F</kbd><span>Pick up a dropped gun</span>
+          <kbd>G</kbd><span>Drop your gun (give it to a teammate)</span>
           <kbd>Esc</kbd><span>Pause / release mouse</span>
           <kbd>F11</kbd><span>Fullscreen</span>
         </div>
@@ -64,7 +69,7 @@
       <div class="panel lobby">
         <div id="lobby-host">
           <h2>Hosting</h2>
-          <p class="muted">Send this code to your friend</p>
+          <p class="muted">Send this code to your friends (up to 3 can join)</p>
           <div class="code" id="host-code">······</div>
           <button class="btn small" id="copy-code">Copy code</button>
           <p class="status pulse" id="host-status">Creating room…</p>
@@ -80,7 +85,7 @@
       </div>
     </section>
 
-    <!-- CHARACTER SELECT -->
+    <!-- CHARACTER SELECT / LOBBY -->
     <section class="screen" id="s-select">
       <div class="sel-left">
         <h2>Choose your fighter</h2>
@@ -88,13 +93,20 @@
         <div class="char-info" id="char-info"></div>
       </div>
       <div class="sel-right">
-        <div class="opp" id="opp-panel"></div>
+        <div class="cfg">
+          <div class="cfg-row">
+            <div><h3>Mode</h3><div class="seg" id="mode-seg"></div></div>
+            <div id="code-wrap"><h3>Room code</h3><div class="mini-code" id="mini-code"></div></div>
+          </div>
+          <div class="teams" id="teams"></div>
+          <button class="btn small" id="swap-team">Switch team</button>
+        </div>
         <div class="cfg">
           <h3>Map</h3>
           <div class="map-list" id="map-list"></div>
           <div class="cfg-row">
-            <div><h3>First to</h3><div class="seg" id="kills-seg"></div></div>
-            <div id="diff-wrap"><h3>Bot</h3><div class="seg" id="diff-seg"></div></div>
+            <div><h3>Rounds to win</h3><div class="seg" id="rounds-seg"></div></div>
+            <div id="diff-wrap"><h3>Bots</h3><div class="seg" id="diff-seg"></div></div>
           </div>
           <p class="muted small" id="cfg-note"></p>
         </div>
@@ -140,6 +152,7 @@
         <div class="over-title" id="over-title">VICTORY</div>
         <div class="over-score" id="over-score">10 — 4</div>
         <div class="over-stats" id="over-stats"></div>
+        <div class="scoreboard" id="scoreboard"></div>
         <p class="muted small" id="over-note"></p>
         <div class="row">
           <button class="btn big green" data-act="rematch">Rematch</button>
@@ -149,7 +162,8 @@
     </section>
   </div>
 
-  <div id="clickplay">CLICK TO PLAY</div>
+  <div id="buy"></div>
+  <div id="clickplay"><div>CLICK TO PLAY</div></div>
   <div id="toast"></div>
   <div id="loading"><div class="spinner"></div><div>Building arena…</div></div>
 

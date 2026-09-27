@@ -56,7 +56,7 @@ export class MenuStage {
       const ring = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.02, 8, 64), new THREE.MeshStandardMaterial({ color: 0x111111, emissive: c.color, emissiveIntensity: 1.8 }));
       ring.rotation.x = Math.PI / 2; ring.position.y = 0.25; g.add(ring);
       const m = new CharacterModel(c);
-      m.setWeapon({ blaze: 1, tank: 2, ghost: 3, volt: 1 }[c.id]);
+      m.setWeapon({ blaze: 'smg', tank: 'shotgun', ghost: 'sniper', volt: 'ar', frost: 'scout', nova: 'mpistol', echo: 'lmg' }[c.id]);
       m.root.position.y = 0.25;
       m.root.traverse(o => { if (o.isMesh) o.castShadow = true; });
       g.add(m.root);
@@ -81,8 +81,8 @@ export class MenuStage {
     this.mode = 'lineup';
     this.sel = { me: 'blaze', enemy: null };
     this.spin = 0;
-    this.camPos = new THREE.Vector3(0.6, 1.8, 8.4);
-    this.camLook = new THREE.Vector3(0.8, 1.15, 0);
+    this.camPos = new THREE.Vector3(0, 1.7, 9.2);
+    this.camLook = new THREE.Vector3(0, 0.85, 0);
     this.camera.position.copy(this.camPos);
   }
 
@@ -97,25 +97,21 @@ export class MenuStage {
     const ids = CHARACTERS.map(c => c.id);
     const targets = {};
     if (this.mode === 'lineup') {
+      const n = ids.length;
       ids.forEach((id, i) => {
-        const a = (i - 1.5) * 0.3;
-        targets[id] = { x: Math.sin(a) * 6 + 2.9, z: -Math.cos(a) * 6 + 5.5, rot: -a * 0.9 + Math.sin(this.t * 0.4 + i) * 0.15, show: true };
+        const a = (i - (n - 1) / 2) * 0.185;
+        targets[id] = { x: Math.sin(a) * 10, z: -Math.cos(a) * 10 + 10, rot: -a * 1.2 + Math.sin(this.t * 0.4 + i) * 0.15, show: true };
       });
-      this.camPos.set(0.6 + Math.sin(this.t * 0.12) * 0.6, 1.8, 8.4);
-      this.camLook.set(0.8, 1.15, 0);
+      this.camPos.set(Math.sin(this.t * 0.12) * 0.5, 1.7, 9.2);
+      this.camLook.set(0, 0.85, 0);
     } else {
       this.spin += dt * 0.5;
       ids.forEach(id => {
-        if (id === this.sel.me) targets[id] = { x: this.sel.enemy ? -1.2 : 1.4, z: 1.5, rot: Math.sin(this.spin) * 0.6 + 0.3, show: true };
-        else if (id === this.sel.enemy) targets[id] = { x: 3.6, z: 0.5, rot: -0.5 + Math.sin(this.spin + 1) * 0.3, show: true };
-        else targets[id] = { x: 0, z: -12, rot: 0, show: false };
+        if (id === this.sel.me) targets[id] = { x: 0, z: 1.5, rot: Math.sin(this.spin) * 0.6, show: true };
+        else targets[id] = { x: 0, z: -14, rot: 0, show: false };
       });
-      if (this.sel.enemy && this.sel.enemy === this.sel.me) {
-        // Same character on both sides: use the lineup model for "me" and just show it centered
-        targets[this.sel.me] = { x: 1.2, z: 1.5, rot: Math.sin(this.spin) * 0.6, show: true };
-      }
-      this.camPos.set(0.6, 1.8, 7.2);
-      this.camLook.set(1.2, 1.15, 0);
+      this.camPos.set(0, 1.7, 6.6);
+      this.camLook.set(0, 1.15, 0);
     }
     if (this.debugCam) { this.camPos.copy(this.debugCam.pos); this.camLook.copy(this.debugCam.look); }
     for (const id of ids) {
@@ -124,7 +120,7 @@ export class MenuStage {
       g.position.x += (t.x - g.position.x) * k;
       g.position.z += (t.z - g.position.z) * k;
       g.rotation.y += (t.rot - g.rotation.y) * k;
-      g.visible = t.show || g.position.z > -10;
+      g.visible = t.show || g.position.z > -11;
       const m = this.models[id];
       m.update(dt, { vx: 0, vz: 0, yaw: Math.PI, pitch: Math.sin(this.t * 0.7 + id.length) * 0.08, grounded: true, dead: false, reload: -1, shield: false });
       m.root.rotation.y = 0; // pedestal handles facing
