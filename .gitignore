@@ -1,0 +1,6 @@
+node_modules/
+dist/
+vendor/
+# Old 2D (Phaser) version, superseded by src3d/ (backup kept outside the repo)
+src/
+assets/ICON_NOTE.txt

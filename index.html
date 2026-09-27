@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PvP Shooter 3D</title>
+  <link rel="stylesheet" href="src3d/style.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./node_modules/three/build/three.module.js",
+        "three/addons/": "./vendor/three-addons/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div id="hud" class="hidden"></div>
+
+  <div id="ui">
+    <!-- MAIN MENU -->
+    <section class="screen" id="s-main">
+      <div class="main-left">
+        <div class="logo"><span class="l1">PVP</span><span class="l2">SHOOTER</span><span class="l3">3D</span></div>
+        <div class="tag">1v1 · PEER-TO-PEER · NO SERVER</div>
+        <label class="name-field">CALLSIGN <input id="name" maxlength="14" spellcheck="false" /></label>
+        <div class="menu-buttons">
+          <button class="btn big green" data-act="bot">Play vs Bot</button>
+          <button class="btn big cyan" data-act="host">Host Online</button>
+          <button class="btn big pink" data-act="join">Join Online</button>
+          <div class="row">
+            <button class="btn" data-act="settings">Settings</button>
+            <button class="btn" data-act="controls">Controls</button>
+            <button class="btn electron-only" data-act="quit">Quit</button>
+          </div>
+        </div>
+      </div>
+      <div class="version">v2.0.0</div>
+    </section>
+
+    <!-- CONTROLS -->
+    <section class="screen dim" id="s-controls">
+      <div class="panel">
+        <h2>Controls</h2>
+        <div class="controls-grid">
+          <kbd>W A S D</kbd><span>Move</span>
+          <kbd>Mouse</kbd><span>Aim</span>
+          <kbd>Left Click</kbd><span>Fire</span>
+          <kbd>Right Click</kbd><span>Aim down sights / scope</span>
+          <kbd>Space</kbd><span>Jump</span>
+          <kbd>Shift</kbd><span>Ability</span>
+          <kbd>R</kbd><span>Reload</span>
+          <kbd>1–4 · Q / E · Wheel</kbd><span>Switch weapon</span>
+          <kbd>Esc</kbd><span>Pause / release mouse</span>
+          <kbd>F11</kbd><span>Fullscreen</span>
+        </div>
+        <button class="btn" data-act="back">Back</button>
+      </div>
+    </section>
+
+    <!-- LOBBY -->
+    <section class="screen dim" id="s-lobby">
+      <div class="panel lobby">
+        <div id="lobby-host">
+          <h2>Hosting</h2>
+          <p class="muted">Send this code to your friend</p>
+          <div class="code" id="host-code">······</div>
+          <button class="btn small" id="copy-code">Copy code</button>
+          <p class="status pulse" id="host-status">Creating room…</p>
+        </div>
+        <div id="lobby-join">
+          <h2>Join Game</h2>
+          <p class="muted">Enter your friend's room code</p>
+          <input class="code-input" id="join-code" maxlength="6" spellcheck="false" autocomplete="off" placeholder="CODE" />
+          <button class="btn big pink" id="join-btn">Connect</button>
+          <p class="status" id="join-status"></p>
+        </div>
+        <button class="btn" data-act="leave">Cancel</button>
+      </div>
+    </section>
+
+    <!-- CHARACTER SELECT -->
+    <section class="screen" id="s-select">
+      <div class="sel-left">
+        <h2>Choose your fighter</h2>
+        <div class="char-list" id="char-list"></div>
+        <div class="char-info" id="char-info"></div>
+      </div>
+      <div class="sel-right">
+        <div class="opp" id="opp-panel"></div>
+        <div class="cfg">
+          <h3>Map</h3>
+          <div class="map-list" id="map-list"></div>
+          <div class="cfg-row">
+            <div><h3>First to</h3><div class="seg" id="kills-seg"></div></div>
+            <div id="diff-wrap"><h3>Bot</h3><div class="seg" id="diff-seg"></div></div>
+          </div>
+          <p class="muted small" id="cfg-note"></p>
+        </div>
+        <div class="sel-actions">
+          <button class="btn" data-act="leave">Back</button>
+          <button class="btn big green" id="ready-btn">Start</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- PAUSE -->
+    <section class="screen dim" id="s-pause">
+      <div class="panel">
+        <h2>Paused</h2>
+        <p class="muted small" id="pause-note"></p>
+        <button class="btn big cyan" data-act="resume">Resume</button>
+        <button class="btn" data-act="settings">Settings</button>
+        <button class="btn" data-act="quitmatch">Leave match</button>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="screen dim" id="s-settings">
+      <div class="panel settings">
+        <h2>Settings</h2>
+        <label>Mouse sensitivity <output id="o-sens"></output><input type="range" id="set-sens" min="0.2" max="3" step="0.05" /></label>
+        <label>Field of view <output id="o-fov"></output><input type="range" id="set-fov" min="60" max="100" step="1" /></label>
+        <label>Volume <output id="o-vol"></output><input type="range" id="set-vol" min="0" max="1" step="0.05" /></label>
+        <label class="check"><input type="checkbox" id="set-invert" /> Invert mouse Y</label>
+        <div class="set-label">Graphics
+          <div class="seg" id="quality-seg">
+            <button data-v="low">Low</button><button data-v="medium">Medium</button><button data-v="high">High</button>
+          </div>
+        </div>
+        <p class="muted small">Graphics changes apply from the next match.</p>
+        <button class="btn" data-act="settings-back">Done</button>
+      </div>
+    </section>
+
+    <!-- GAME OVER -->
+    <section class="screen dim" id="s-over">
+      <div class="panel over">
+        <div class="over-title" id="over-title">VICTORY</div>
+        <div class="over-score" id="over-score">10 — 4</div>
+        <div class="over-stats" id="over-stats"></div>
+        <p class="muted small" id="over-note"></p>
+        <div class="row">
+          <button class="btn big green" data-act="rematch">Rematch</button>
+          <button class="btn big" data-act="menu">Main menu</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div id="clickplay">CLICK TO PLAY</div>
+  <div id="toast"></div>
+  <div id="loading"><div class="spinner"></div><div>Building arena…</div></div>
+
+  <script src="node_modules/peerjs/dist/peerjs.min.js"></script>
+  <script type="module" src="src3d/main.js"></script>
+</body>
+</html>

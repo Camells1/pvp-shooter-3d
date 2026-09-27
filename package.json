@@ -1,0 +1,56 @@
+{
+  "name": "pvp-shooter-3d",
+  "version": "2.0.0",
+  "description": "3D online 1v1 PvP shooter",
+  "author": "Camells1",
+  "main": "electron/main.js",
+  "scripts": {
+    "postinstall": "node tools/vendor.js",
+    "start": "electron .",
+    "serve": "node tools/serve.js",
+    "icon": "electron tools/make-icon.js",
+    "prebuild": "node tools/vendor.js",
+    "build": "electron-builder --win --publish never"
+  },
+  "dependencies": {
+    "peerjs": "^1.5.4",
+    "three": "^0.169.0"
+  },
+  "devDependencies": {
+    "electron": "^30.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.pvpshooter.app",
+    "productName": "PvP Shooter 3D",
+    "files": [
+      "electron/**/*",
+      "src3d/**/*",
+      "assets/icon.png",
+      "vendor/**/*",
+      "index.html",
+      "node_modules/three/build/three.module.js",
+      "node_modules/peerjs/dist/peerjs.min.js",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "artifactName": "PvP-Shooter-3D-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "PvP-Shooter-3D-Portable-${version}.${ext}"
+    }
+  },
+  "allowScripts": {
+    "electron@30.5.1": true
+  }
+}
