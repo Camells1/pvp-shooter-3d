@@ -116,28 +116,29 @@ export class World {
 
   findPath(from, to) {
     if (!from || !to) return null;
-    const nodes = this.nav;
-    const g = new Float32Array(nodes.length).fill(Infinity);
-    const prev = new Int32Array(nodes.length).fill(-1);
-    const open = [from.id];
-    const f = new Float32Array(nodes.length).fill(Infinity);
+    const nodes = this.nav, N = nodes.length;
+    const g = new Float32Array(N).fill(Infinity);
+    const prev = new Int32Array(N).fill(-1);
+    const closed = new Uint8Array(N);
+    // Binary heap of [f, id]
+    const heap = [];
+    const push = (f, id) => { heap.push([f, id]); let i = heap.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (heap[p][0] <= heap[i][0]) break; [heap[p], heap[i]] = [heap[i], heap[p]]; i = p; } };
+    const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let i = 0; for (;;) { const l = i * 2 + 1, r = l + 1; let m = i; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === i) break; [heap[m], heap[i]] = [heap[i], heap[m]]; i = m; } } return top; };
     g[from.id] = 0;
-    f[from.id] = Math.hypot(to.x - from.x, to.z - from.z);
-    const inOpen = new Uint8Array(nodes.length); inOpen[from.id] = 1;
+    push(Math.hypot(to.x - from.x, to.z - from.z), from.id);
     let iter = 0;
-    while (open.length && iter++ < 4000) {
-      let bi = 0;
-      for (let k = 1; k < open.length; k++) if (f[open[k]] < f[open[bi]]) bi = k;
-      const cur = open[bi];
-      open[bi] = open[open.length - 1]; open.pop(); inOpen[cur] = 0;
+    while (heap.length && iter++ < 20000) {
+      const [, cur] = pop();
+      if (closed[cur]) continue;
+      closed[cur] = 1;
       if (cur === to.id) break;
       for (const e of nodes[cur].edges) {
+        if (closed[e.to]) continue;
         const ng = g[cur] + e.cost + (e.jump ? 1.5 : 0);
         if (ng < g[e.to]) {
           g[e.to] = ng; prev[e.to] = cur;
           const n = nodes[e.to];
-          f[e.to] = ng + Math.hypot(to.x - n.x, to.z - n.z);
-          if (!inOpen[e.to]) { open.push(e.to); inOpen[e.to] = 1; }
+          push(ng + Math.hypot(to.x - n.x, to.z - n.z), e.to);
         }
       }
     }

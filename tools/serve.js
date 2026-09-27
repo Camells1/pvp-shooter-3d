@@ -8,7 +8,7 @@ const root = path.resolve(__dirname, '..');
 const port = Number(process.argv[2]) || 5178;
 const types = {
   '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript',
-  '.css': 'text/css', '.json': 'application/json', '.png': 'image/png',
+  '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml',
   '.jpg': 'image/jpeg', '.glb': 'model/gltf-binary', '.ico': 'image/x-icon', '.map': 'application/json'
 };
 

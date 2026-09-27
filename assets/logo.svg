@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 200" width="640" height="200">
+  <rect width="640" height="200" rx="18" fill="#0f1116"/>
+  <!-- Mark: two parallel blades split by a rift -->
+  <g transform="translate(40 30)">
+    <polygon points="4,140 38,140 96,0 62,0" fill="#ff3d5a"/>
+    <polygon points="52,140 86,140 126,44 92,44" fill="#ff3d5a"/>
+    <polygon points="98,30 132,30 144,0 110,0" fill="#f5f0e8"/>
+  </g>
+  <!-- Wordmark -->
+  <text x="212" y="126" font-family="Bahnschrift, 'Segoe UI', sans-serif" font-weight="700" font-size="74" letter-spacing="10" fill="#f5f0e8">RIFTLINE</text>
+  <rect x="214" y="142" width="44" height="6" fill="#ff3d5a"/>
+</svg>

@@ -1,7 +1,7 @@
 {
-  "name": "pvp-shooter-3d",
-  "version": "2.1.0",
-  "description": "3D online 1v1 PvP shooter",
+  "name": "riftline",
+  "version": "2.2.0",
+  "description": "Riftline: a tactical 3D 1v1/2v2 shooter. Peer-to-peer, no server.",
   "author": "Camells1",
   "main": "electron/main.js",
   "scripts": {
@@ -21,8 +21,8 @@
     "electron-builder": "^24.13.3"
   },
   "build": {
-    "appId": "com.pvpshooter.app",
-    "productName": "PvP Shooter 3D",
+    "appId": "com.riftline.game",
+    "productName": "Riftline",
     "files": [
       "electron/**/*",
       "src3d/**/*",
@@ -44,10 +44,10 @@
       "oneClick": true,
       "perMachine": false,
       "createDesktopShortcut": true,
-      "artifactName": "PvP-Shooter-3D-Setup-${version}.${ext}"
+      "artifactName": "Riftline-Setup-${version}.${ext}"
     },
     "portable": {
-      "artifactName": "PvP-Shooter-3D-Portable-${version}.${ext}"
+      "artifactName": "Riftline-Portable-${version}.${ext}"
     }
   },
   "allowScripts": {

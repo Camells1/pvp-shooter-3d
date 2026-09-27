@@ -8,7 +8,7 @@ function createWindow() {
     minWidth: 1024,
     minHeight: 600,
     backgroundColor: '#05070b',
-    title: 'PvP Shooter 3D',
+    title: 'Riftline',
     icon: path.join(__dirname, '..', 'assets', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

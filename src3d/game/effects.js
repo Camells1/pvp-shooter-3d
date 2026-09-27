@@ -166,7 +166,44 @@ export class Effects {
     this.ring(new THREE.Vector3(from.x, from.y + 0.05, from.z), color);
   }
 
+  explosion(pos, color = 0xff8a3a, radius = 5) {
+    if (!this.booms) this.booms = [];
+    const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16), mat);
+    ball.position.copy(pos); this.scene.add(ball);
+    const light = new THREE.PointLight(color, 120, radius * 5, 2); light.position.copy(pos); this.scene.add(light);
+    this.booms.push({ ball, light, t: 0, radius });
+    this.burst(pos, color, 70, radius * 2.2, 0.8, 6);
+    this.burst(pos, 0x444444, 30, radius * 0.8, 1.4, -1.5);
+    this.ring(new THREE.Vector3(pos.x, pos.y - 0.4, pos.z), color, radius * 1.2);
+  }
+
+  // Jagged lightning through a list of points
+  beam(points, color = 0x7ff6ff) {
+    for (let i = 0; i < points.length - 1; i++) {
+      const a = points[i], b = points[i + 1];
+      let prev = a.clone();
+      const n = 6;
+      for (let k = 1; k <= n; k++) {
+        const p = a.clone().lerp(b, k / n);
+        if (k < n) p.add(new THREE.Vector3((Math.random() - 0.5) * 0.5, (Math.random() - 0.5) * 0.5, (Math.random() - 0.5) * 0.5));
+        this.tracer(prev, p, color, 0.05);
+        prev = p;
+      }
+      this.burst(b, color, 20, 3, 0.4, 2);
+    }
+  }
+
   update(dt) {
+    if (this.booms) for (let i = this.booms.length - 1; i >= 0; i--) {
+      const b = this.booms[i];
+      b.t += dt;
+      const k = b.t / 0.45;
+      b.ball.scale.setScalar(0.5 + k * b.radius);
+      b.ball.material.opacity = Math.max(0, 0.85 * (1 - k));
+      b.light.intensity = Math.max(0, 120 * (1 - k));
+      if (k >= 1) { this.scene.remove(b.ball); this.scene.remove(b.light); b.ball.geometry.dispose(); this.booms.splice(i, 1); }
+    }
     for (const t of this.tracers) {
       if (!t.mesh.visible) continue;
       t.life -= dt;

@@ -75,8 +75,21 @@ export const sfx = {
     if (kind === 'dash') { noise(d, t, 0.3, 400, 3000, 1.5, 'bandpass', 1); }
     else if (kind === 'blink') { tone(d, t, 0.25, 300, 2400, 'sine', 0.6); noise(d, t, 0.2, 6000, 1500, 2, 'bandpass', 0.5); }
     else if (kind === 'shield') { tone(d, t, 0.5, 120, 480, 'sawtooth', 0.25); tone(d, t, 0.6, 240, 960, 'sine', 0.35); }
+    else if (kind === 'fire') { noise(d, t, 0.8, 800, 200, 0.6, 'lowpass', 0.9); tone(d, t, 0.3, 90, 50, 'sawtooth', 0.3); }
+    else if (kind === 'zap') { for (let i = 0; i < 6; i++) noise(d, t + i * 0.03, 0.05, 5000, 2000, 3, 'bandpass', 0.8); tone(d, t, 0.25, 1200, 200, 'sawtooth', 0.25); }
+    else if (kind === 'frost') { noise(d, t, 0.6, 7000, 2500, 2, 'bandpass', 0.6); tone(d, t, 0.5, 1800, 600, 'sine', 0.3); }
+    else if (kind === 'heal') { [660, 880, 1100].forEach((f, i) => tone(d, t + i * 0.08, 0.3, f, f * 1.01, 'sine', 0.35)); }
     else { for (let i = 0; i < 4; i++) tone(d, t + i * 0.05, 0.08, 800 + i * 300, 1600 + i * 300, 'square', 0.18); }
   },
+  explode(dist = 0) {
+    if (!ctx) return;
+    const d = out(0.8 * Math.max(0.1, 1 / (1 + dist * 0.05))), t = ctx.currentTime;
+    noise(d, t, 1.2, 1500, 60, 0.5, 'lowpass', 1.8); tone(d, t, 0.8, 90, 25, 'sine', 1.4);
+  },
+  beep(urgent) { if (!ctx) return; tone(out(0.25), ctx.currentTime, 0.07, urgent ? 1800 : 1400, urgent ? 1800 : 1400, 'square', 0.35); },
+  channel() { if (!ctx) return; tone(out(0.2), ctx.currentTime, 0.12, 600, 900, 'triangle', 0.4); },
+  planted() { if (!ctx) return; const d = out(0.5), t = ctx.currentTime; [880, 660, 880, 1320].forEach((f, i) => tone(d, t + i * 0.12, 0.14, f, f, 'square', 0.3)); },
+  defused() { if (!ctx) return; const d = out(0.5), t = ctx.currentTime; [1320, 990, 660].forEach((f, i) => tone(d, t + i * 0.1, 0.2, f, f * 0.8, 'triangle', 0.4)); },
   pickup() { if (!ctx) return; const d = out(0.4), t = ctx.currentTime; tone(d, t, 0.15, 520, 780, 'sine', 0.6); tone(d, t + 0.1, 0.2, 780, 1170, 'sine', 0.6); },
   click() { if (!ctx) return; tone(out(0.2), ctx.currentTime, 0.05, 1200, 900, 'square', 0.3); },
   hover() { if (!ctx) return; tone(out(0.08), ctx.currentTime, 0.03, 1800, 1800, 'sine', 0.3); },

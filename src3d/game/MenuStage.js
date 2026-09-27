@@ -5,7 +5,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { CHARACTERS, charById } from './data.js';
-import { CharacterModel } from './models.js';
+import { CharacterModel, buildGun } from './models.js';
 import { getEnvMap } from './envmap.js';
 
 function gridTexture() {
@@ -86,6 +86,21 @@ export class MenuStage {
     this.camera.position.copy(this.camPos);
   }
 
+  // Shop preview: one big rotating gun
+  showGun(id, skin) {
+    if (!this.gunGroup) { this.gunGroup = new THREE.Group(); this.gunGroup.position.set(0, 1.45, 1.5); this.scene.add(this.gunGroup); }
+    if (this.gunKey === id + skin) return;
+    this.gunKey = id + skin;
+    this.gunGroup.clear();
+    const g = buildGun(id, 0xff3d5a, skin);
+    const box = new THREE.Box3().setFromObject(g);
+    const size = box.getSize(new THREE.Vector3()), center = box.getCenter(new THREE.Vector3());
+    g.position.sub(center);
+    const holder = new THREE.Group(); holder.add(g);
+    holder.scale.setScalar(1.35 / Math.max(size.x, size.y, size.z));
+    this.gunGroup.add(holder);
+  }
+
   setMode(mode, me, enemy) {
     this.mode = mode;
     if (me) this.sel.me = me;
@@ -96,14 +111,28 @@ export class MenuStage {
     this.t += dt;
     const ids = CHARACTERS.map(c => c.id);
     const targets = {};
-    if (this.mode === 'lineup') {
+    if (this.gunGroup) { this.gunGroup.visible = this.mode === 'gun'; this.gunGroup.rotation.y = -Math.PI / 2 + Math.sin(this.t * 0.6) * 0.45; this.gunGroup.rotation.x = Math.sin(this.t * 0.5) * 0.1; }
+    if (this.mode === 'gun') {
+      ids.forEach(id => { targets[id] = { x: 0, z: -14, rot: 0, show: false }; });
+      this.camPos.set(0, 1.55, 5.6);
+      this.camLook.set(0, 1.35, 1.5);
+    } else if (this.mode === 'lineup') {
       const n = ids.length;
       ids.forEach((id, i) => {
         const a = (i - (n - 1) / 2) * 0.185;
         targets[id] = { x: Math.sin(a) * 10, z: -Math.cos(a) * 10 + 10, rot: -a * 1.2 + Math.sin(this.t * 0.4 + i) * 0.15, show: true };
       });
-      this.camPos.set(Math.sin(this.t * 0.12) * 0.5, 1.7, 9.2);
-      this.camLook.set(0, 0.85, 0);
+      // Fit the whole lineup to the window, whatever its shape:
+      // edges are ~6.2m out (incl. pedestals) and ~1.6m closer to the camera than the middle.
+      const tanV = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+      const tanH = tanV * this.camera.aspect;
+      const dW = 1.6 + 6.3 / (tanH * 0.94);          // width: use 94% of the screen
+      const dH = 2.5 / (2 * tanV * 0.42);            // height: fighters take ~42% of the screen
+      const d = Math.max(dW, dH, 7);
+      // Keep the fighters in the band between the logo (top) and the buttons (bottom)
+      const lookY = 1.25 - 0.1 * 2 * d * tanV;
+      this.camPos.set(Math.sin(this.t * 0.12) * 0.4, lookY + 0.9, d);
+      this.camLook.set(0, lookY, 0);
     } else {
       this.spin += dt * 0.5;
       ids.forEach(id => {
@@ -120,7 +149,7 @@ export class MenuStage {
       g.position.x += (t.x - g.position.x) * k;
       g.position.z += (t.z - g.position.z) * k;
       g.rotation.y += (t.rot - g.rotation.y) * k;
-      g.visible = t.show || g.position.z > -11;
+      g.visible = t.show || (this.mode !== 'gun' && g.position.z > -11);
       const m = this.models[id];
       m.update(dt, { vx: 0, vz: 0, yaw: Math.PI, pitch: Math.sin(this.t * 0.7 + id.length) * 0.08, grounded: true, dead: false, reload: -1, shield: false });
       m.root.rotation.y = 0; // pedestal handles facing
@@ -130,6 +159,7 @@ export class MenuStage {
     this.rimB.intensity = 70 + Math.cos(this.t * 1.1) * 12;
 
     const cam = this.camera;
+    if (this.snap) { cam.position.copy(this.camPos); this._look = this.camLook.clone(); this.snap = false; }
     cam.position.lerp(this.camPos, Math.min(1, dt * 3));
     this._look = this._look || this.camLook.clone();
     this._look.lerp(this.camLook, Math.min(1, dt * 3));
@@ -138,6 +168,7 @@ export class MenuStage {
   }
 
   resize(w, h) {
+    this.snap = true;
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.composer.setSize(w, h);

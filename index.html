@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PvP Shooter 3D</title>
+  <title>Riftline</title>
+  <link rel="icon" href="assets/icon.png" />
   <link rel="stylesheet" href="src3d/style.css" />
   <script type="importmap">
     {
@@ -21,24 +22,51 @@
   <div id="ui">
     <!-- MAIN MENU -->
     <section class="screen" id="s-main">
+      <div class="topbar">
+        <div class="coins" title="Coins: earned by playing matches, spent in the Shop">◈ <span id="coin-count">0</span></div>
+      </div>
       <div class="main-top">
-        <div class="logo"><span class="l1">PVP</span><span class="l2">SHOOTER</span><span class="l3">3D</span></div>
-        <div class="tag">1v1 · 2v2 · ROUND-BASED · PEER-TO-PEER</div>
+        <svg class="brand" viewBox="0 0 560 150" aria-label="Riftline">
+          <g transform="translate(6 5)">
+            <polygon points="4,140 38,140 96,0 62,0" fill="#ff3d5a"/>
+            <polygon points="52,140 86,140 126,44 92,44" fill="#ff3d5a"/>
+            <polygon points="98,30 132,30 144,0 110,0" fill="#f5f0e8"/>
+          </g>
+          <text x="172" y="104" font-family="Bahnschrift, 'Segoe UI', sans-serif" font-weight="700" font-size="74" letter-spacing="10" fill="#f5f0e8">RIFTLINE</text>
+          <rect x="174" y="120" width="44" height="6" fill="#ff3d5a"/>
+        </svg>
+        <div class="tag">TACTICAL 1v1 · 2v2 · PEER-TO-PEER</div>
       </div>
       <div class="main-bottom">
         <label class="name-field">CALLSIGN <input id="name" maxlength="14" spellcheck="false" /></label>
         <div class="main-row">
+          <button class="btn big red" data-act="quick">Quick Play</button>
           <button class="btn big green" data-act="bot">Play vs Bots</button>
-          <button class="btn big cyan" data-act="host">Host Online</button>
-          <button class="btn big pink" data-act="join">Join Online</button>
+          <button class="btn big cyan" data-act="host">Create Room</button>
+          <button class="btn big pink" data-act="join">Join Room</button>
         </div>
         <div class="main-row small">
+          <button class="btn" data-act="range">Practice Range</button>
+          <button class="btn gold" data-act="store">Store</button>
+          <button class="btn" data-act="locker">Locker</button>
           <button class="btn" data-act="settings">Settings</button>
           <button class="btn" data-act="controls">Controls</button>
           <button class="btn electron-only" data-act="quit">Quit</button>
         </div>
       </div>
-      <div class="version">v2.1.0</div>
+      <div class="version" id="version"></div>
+    </section>
+
+    <!-- QUICK PLAY -->
+    <section class="screen dim" id="s-queue">
+      <div class="panel lobby">
+        <h2>Quick Play</h2>
+        <p class="muted">Finds other players automatically. No code needed.</p>
+        <div class="seg big-seg" id="queue-seg"><button data-q="1v1" class="sel">1v1</button><button data-q="2v2">2v2</button></div>
+        <button class="btn big red" id="queue-btn">Find Match</button>
+        <div class="queue-status" id="queue-status"></div>
+        <button class="btn" data-act="leave">Cancel</button>
+      </div>
     </section>
 
     <!-- CONTROLS -->
@@ -46,36 +74,32 @@
       <div class="panel">
         <h2>Controls</h2>
         <div class="controls-grid">
-          <kbd>W A S D</kbd><span>Move</span>
-          <kbd>Mouse</kbd><span>Aim</span>
-          <kbd>Left Click</kbd><span>Fire</span>
-          <kbd>Right Click</kbd><span>Aim down sights / scope</span>
-          <kbd>Space</kbd><span>Jump</span>
-          <kbd>Shift</kbd><span>Ability</span>
+          <kbd>W A S D · Space</kbd><span>Move · Jump</span>
+          <kbd>Shift</kbd><span>Walk (quiet, steadier aim)</span>
+          <kbd>Left / Right Click</kbd><span>Fire / Aim down sights</span>
+          <kbd>Q · E · X</kbd><span>Abilities · Ultimate</span>
           <kbd>R</kbd><span>Reload</span>
-          <kbd>1 / 2 · Q · Wheel</kbd><span>Primary / sidearm / last weapon</span>
+          <kbd>1 / 2 · Wheel</kbd><span>Primary / Sidearm</span>
           <kbd>B</kbd><span>Buy menu (buy phase)</span>
-          <kbd>F</kbd><span>Pick up a dropped gun</span>
+          <kbd>F</kbd><span>Pick up gun · hold to plant / defuse</span>
           <kbd>G</kbd><span>Drop your gun (give it to a teammate)</span>
-          <kbd>Esc</kbd><span>Pause / release mouse</span>
-          <kbd>F11</kbd><span>Fullscreen</span>
+          <kbd>Tab</kbd><span>Scoreboard</span>
+          <kbd>V</kbd><span>First / third person</span>
+          <kbd>Esc · F11</kbd><span>Pause · Fullscreen</span>
         </div>
         <button class="btn" data-act="back">Back</button>
       </div>
     </section>
 
-    <!-- LOBBY -->
+    <!-- LOBBY (create / join) -->
     <section class="screen dim" id="s-lobby">
       <div class="panel lobby">
         <div id="lobby-host">
-          <h2>Hosting</h2>
-          <p class="muted">Send this code to your friends (up to 3 can join)</p>
-          <div class="code" id="host-code">······</div>
-          <button class="btn small" id="copy-code">Copy code</button>
+          <h2>Create Room</h2>
           <p class="status pulse" id="host-status">Creating room…</p>
         </div>
         <div id="lobby-join">
-          <h2>Join Game</h2>
+          <h2>Join Room</h2>
           <p class="muted">Enter your friend's room code</p>
           <input class="code-input" id="join-code" maxlength="6" spellcheck="false" autocomplete="off" placeholder="CODE" />
           <button class="btn big pink" id="join-btn">Connect</button>
@@ -88,15 +112,16 @@
     <!-- CHARACTER SELECT / LOBBY -->
     <section class="screen" id="s-select">
       <div class="sel-left">
-        <h2>Choose your fighter</h2>
+        <h2>Choose your agent</h2>
         <div class="char-list" id="char-list"></div>
         <div class="char-info" id="char-info"></div>
       </div>
       <div class="sel-right">
         <div class="cfg">
           <div class="cfg-row">
-            <div><h3>Mode</h3><div class="seg" id="mode-seg"></div></div>
-            <div id="code-wrap"><h3>Room code</h3><div class="mini-code" id="mini-code"></div></div>
+            <div><h3>Mode</h3><div class="seg" id="game-seg"></div></div>
+            <div><h3>Teams</h3><div class="seg" id="mode-seg"></div></div>
+            <div id="code-wrap"><h3>Room code</h3><div class="mini-code" id="mini-code" title="Click to copy"></div></div>
           </div>
           <div class="teams" id="teams"></div>
           <button class="btn small" id="swap-team">Switch team</button>
@@ -117,6 +142,34 @@
       </div>
     </section>
 
+    <!-- STORE -->
+    <section class="screen" id="s-store">
+      <div class="store-head">
+        <div><h2>Store</h2><div class="muted small">New offers every day · refreshes in <b id="store-timer"></b></div></div>
+        <div class="coins big">◈ <span class="coin-live">0</span></div>
+      </div>
+      <div class="store-body">
+        <div class="featured" id="store-featured"></div>
+        <div class="store-preview" id="store-preview"></div>
+        <div class="offers" id="store-offers"></div>
+      </div>
+      <div class="store-foot"><button class="btn" data-act="back">Back</button><span class="muted small">Earn ◈ by playing: 50 per match, +100 per win, +10 per kill, +5 per round won.</span></div>
+    </section>
+
+    <!-- LOCKER -->
+    <section class="screen" id="s-locker">
+      <div class="locker-left">
+        <h2>Locker</h2>
+        <p class="muted small">Equip skins you own. Your friends see them in matches.</p>
+        <div class="locker-grid" id="locker-grid"></div>
+        <button class="btn" data-act="back">Back</button>
+      </div>
+      <div class="locker-right">
+        <div class="locker-title" id="locker-title"></div>
+        <div class="locker-skins" id="locker-skins"></div>
+      </div>
+    </section>
+
     <!-- PAUSE -->
     <section class="screen dim" id="s-pause">
       <div class="panel">
@@ -133,15 +186,18 @@
       <div class="panel settings">
         <h2>Settings</h2>
         <label>Mouse sensitivity <output id="o-sens"></output><input type="range" id="set-sens" min="0.2" max="3" step="0.05" /></label>
-        <label>Field of view <output id="o-fov"></output><input type="range" id="set-fov" min="60" max="100" step="1" /></label>
+        <label>Field of view <output id="o-fov"></output><input type="range" id="set-fov" min="60" max="110" step="1" /></label>
         <label>Volume <output id="o-vol"></output><input type="range" id="set-vol" min="0" max="1" step="0.05" /></label>
         <label class="check"><input type="checkbox" id="set-invert" /> Invert mouse Y</label>
+        <div class="set-label">Camera
+          <div class="seg" id="camera-seg"><button data-v="first">First person</button><button data-v="third">Third person</button></div>
+        </div>
         <div class="set-label">Graphics
           <div class="seg" id="quality-seg">
             <button data-v="low">Low</button><button data-v="medium">Medium</button><button data-v="high">High</button>
           </div>
         </div>
-        <p class="muted small">Graphics changes apply from the next match.</p>
+        <p class="muted small">Graphics changes apply from the next match. Press V in a match to switch camera.</p>
         <button class="btn" data-act="settings-back">Done</button>
       </div>
     </section>
@@ -151,6 +207,7 @@
       <div class="panel over">
         <div class="over-title" id="over-title">VICTORY</div>
         <div class="over-score" id="over-score">10 — 4</div>
+        <div class="over-coins" id="over-coins"></div>
         <div class="over-stats" id="over-stats"></div>
         <div class="scoreboard" id="scoreboard"></div>
         <p class="muted small" id="over-note"></p>

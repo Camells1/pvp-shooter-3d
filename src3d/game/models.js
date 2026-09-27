@@ -1,6 +1,7 @@
 // Procedural character + weapon models with IK arms and procedural animation.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { skinMats } from './skins.js';
 
 const geoCache = new Map();
 function rb(w, h, d, r = 0.02) {
@@ -65,8 +66,8 @@ function gunMats(accent) {
 
 // Returns group (+Z forward), with userData.muzzle, grip, fore (Vector3 local points).
 export const SIDEARMS = new Set(['classic', 'mpistol', 'cannon']);
-export function buildGun(id, accent = 0xff8800) {
-  const m = gunMats(accent);
+export function buildGun(id, accent = 0xff8800, skin = 'default') {
+  const m = skinMats(skin, accent);
   const g = new THREE.Group();
   const add = (geo, mat, x, y, z, rx = 0) => { const k = mesh(geo, mat, x, y, z, g); k.rotation.x = rx; return k; };
   let muzzle, grip = new THREE.Vector3(0, -0.07, 0), fore;
@@ -401,11 +402,11 @@ export class CharacterModel {
     }
   }
 
-  setWeapon(id) {
-    if (id === this.weaponId) return;
-    this.weaponId = id;
+  setWeapon(id, skin = 'default') {
+    if (id === this.weaponId && skin === this.skinId) return;
+    this.weaponId = id; this.skinId = skin;
     if (this.gun) this.gunMount.remove(this.gun);
-    this.gun = buildGun(id, this.char.accent);
+    this.gun = buildGun(id, this.char.accent, skin);
     this.gunMount.add(this.gun);
     // Sidearms are held closer to the chest
     const side = SIDEARMS.has(id);
@@ -547,6 +548,25 @@ export class CharacterModel {
   }
 
   dispose() {
-    this.root.traverse(o => { if (o.material && !Object.values(gunMatCache).some(m => Object.values(m).includes(o.material))) o.material.dispose?.(); });
+    this.root.traverse(o => { if (o.material && !o.material.userData?.shared) o.material.dispose?.(); });
   }
+}
+
+// The spike (bomb) for attack/defend mode.
+export function buildSpike() {
+  const g = new THREE.Group();
+  const dark = new THREE.MeshStandardMaterial({ color: 0x22252b, metalness: 0.85, roughness: 0.3 });
+  const plate = new THREE.MeshStandardMaterial({ color: 0x3a3f47, metalness: 0.8, roughness: 0.35 });
+  const red = new THREE.MeshStandardMaterial({ color: 0x111111, emissive: 0xff3d5a, emissiveIntensity: 2.4 });
+  mesh(cyl(0.15, 0.2, 0.5, 8), dark, 0, 0.25, 0, g);
+  for (const y of [0.12, 0.3, 0.44]) mesh(tor(0.175, 0.014), red, 0, y, 0, g).rotation.x = Math.PI / 2;
+  for (let i = 0; i < 4; i++) {
+    const fin = mesh(rb(0.04, 0.34, 0.14, 0.01), plate, Math.cos(i * Math.PI / 2) * 0.2, 0.22, Math.sin(i * Math.PI / 2) * 0.2, g);
+    fin.rotation.y = -i * Math.PI / 2;
+  }
+  const core = mesh(sph(0.07, 12, 10), red, 0, 0.56, 0, g);
+  const light = new THREE.PointLight(0xff3d5a, 0, 8, 2);
+  light.position.y = 0.7; g.add(light);
+  g.userData = { core, light, red };
+  return g;
 }

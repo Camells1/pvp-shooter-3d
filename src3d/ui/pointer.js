@@ -13,7 +13,9 @@ export class PointerLock {
       const was = this.locked;
       this.locked = document.pointerLockElement === el;
       this.pending = false;
-      if (was && !this.locked) this.lastExit = performance.now();
+      // Only a user Esc triggers the browser's re-lock cooldown; our own release() doesn't
+      if (was && !this.locked && !this.selfRelease) this.lastExit = performance.now();
+      this.selfRelease = false;
       for (const fn of this.listeners) fn(this.locked);
     });
     document.addEventListener('pointerlockerror', () => { this.pending = false; });
@@ -42,5 +44,5 @@ export class PointerLock {
     }).finally(() => { this.pending = false; });
   }
 
-  release() { if (document.pointerLockElement) document.exitPointerLock(); }
+  release() { if (document.pointerLockElement) { this.selfRelease = true; document.exitPointerLock(); } }
 }
