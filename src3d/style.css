@@ -526,3 +526,10 @@ input[type=checkbox] { accent-color: var(--cyan); width: 16px; height: 16px; }
 .agent-pick.locked button:not(.sel) { opacity: .45; }
 .queue-status .count { font-size: 28px; font-weight: 900; color: var(--gold); margin-left: 8px; }
 @media (max-width: 1100px) { .agent-pick { grid-template-columns: repeat(4, 1fr); } }
+
+/* Quick Play panel: undo the generic ".lobby > div" column layout for these rows */
+#s-queue .panel { width: min(720px, 94vw); max-height: 94vh; overflow: auto; }
+.lobby > .agent-pick { display: grid; grid-template-columns: repeat(7, 1fr); align-items: stretch; width: 100%; }
+.lobby > .seg { display: inline-flex; flex-direction: row; width: auto; gap: 0; }
+.lobby > .queue-status { flex-direction: row; justify-content: center; }
+@media (max-width: 760px) { .lobby > .agent-pick { grid-template-columns: repeat(4, 1fr); } }
