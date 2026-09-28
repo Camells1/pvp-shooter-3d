@@ -35,9 +35,32 @@ const cleanName = n => String(n || '').replace(/[^\p{L}\p{N} _.-]/gu, '').replac
 if (!cleanTag(settings.tag)) settings.tag = randomTag();
 setVolume(settings.volume);
 
+// Coins and skins. Guests keep them on this PC; signed-in players keep them on their account
+// (a local cache per account, and the cloud copy wins when the game starts).
 const profile = { coins: COINS.start, owned: [], equipped: {} };
-try { Object.assign(profile, JSON.parse(localStorage.getItem('riftline-profile') || '{}')); } catch (_) {}
-const saveProfile = () => { try { localStorage.setItem('riftline-profile', JSON.stringify(profile)); } catch (_) {} renderCoins(); };
+let profileKey = 'riftline-profile';
+const loadProfileFrom = key => {
+  profileKey = key;
+  const fresh = { coins: COINS.start, owned: [], equipped: {} };
+  try { Object.assign(fresh, JSON.parse(localStorage.getItem(key) || 'null') || {}); } catch (_) {}
+  Object.assign(profile, fresh);
+};
+loadProfileFrom('riftline-profile');
+// Signed in last time: show that account's cached coins right away (the cloud copy loads a moment later)
+try {
+  const last = JSON.parse(localStorage.getItem('riftline-auth') || sessionStorage.getItem('riftline-auth') || 'null');
+  if (last?.uid && localStorage.getItem('riftline-profile-' + last.uid)) loadProfileFrom('riftline-profile-' + last.uid);
+} catch (_) {}
+let cloudTimer = 0;
+const saveProfile = () => {
+  try { localStorage.setItem(profileKey, JSON.stringify(profile)); } catch (_) {}
+  renderCoins();
+  // Push to the account a moment later (batches several changes into one write)
+  if (account.signedIn && profileKey !== 'riftline-profile') {
+    clearTimeout(cloudTimer);
+    cloudTimer = setTimeout(() => account.saveProgress('riftline', { coins: profile.coins, owned: profile.owned, equipped: profile.equipped }).catch(() => {}), 1200);
+  }
+};
 const mySkins = () => ({ ...profile.equipped });
 function renderCoins() { $('#coin-count').textContent = profile.coins.toLocaleString(); for (const el of document.querySelectorAll('.coin-live')) el.textContent = profile.coins.toLocaleString(); }
 renderCoins();
@@ -105,8 +128,28 @@ function renderOnline() {
 function adoptAccount(u) {
   if (!u) return;
   if (u.name && u.tag) { settings.name = u.name; settings.tag = u.tag; settings.account = true; save(); }
-  else if (settings.account) account.setId(settings.name, settings.tag).catch(() => {});
+  else if (settings.account) account.claimId(settings.name, settings.tag).catch(() => {});
   renderId();
+  syncProgress(u);
+}
+// Switch to the account's coins and skins. The first time an account is used, this PC's progress moves onto it.
+async function syncProgress(u) {
+  const key = 'riftline-profile-' + u.uid;
+  const firstTime = !localStorage.getItem(key);
+  const guest = { ...profile };
+  loadProfileFrom(key);
+  if (firstTime) Object.assign(profile, { coins: guest.coins, owned: [...guest.owned], equipped: { ...guest.equipped } });
+  renderCoins(); refreshShops();
+  try {
+    const cloud = await account.loadProgress('riftline');
+    if (cloud) Object.assign(profile, { coins: cloud.coins ?? profile.coins, owned: cloud.owned || [], equipped: cloud.equipped || {} });
+    saveProfile(); // cache locally and (if the account had nothing yet) upload this PC's progress
+    refreshShops();
+  } catch (_) { /* offline: keep the cached copy, it uploads on the next change */ }
+}
+function refreshShops() {
+  if (app.screen === 'store') renderStore();
+  if (app.screen === 'locker') renderLocker();
 }
 async function doLogin() {
   const api = window.electronAPI;
@@ -123,6 +166,7 @@ async function doLogin() {
 }
 async function doLogout() {
   account.logout();
+  loadProfileFrom('riftline-profile'); renderCoins(); refreshShops();
   await window.electronAPI?.logout?.();
   renderId();
   toast('Logged out', 2000, true);
@@ -133,7 +177,11 @@ document.addEventListener('click', e => {
   if (e.target.closest('#acc-logout')) doLogout();
 });
 // Stay logged in: refresh the saved session in the background on launch
-account.restore().then(adoptAccount).catch(() => renderId());
+account.restore().then(adoptAccount).catch(() => {
+  // Session was rejected (signed out elsewhere, password changed): back to this PC's guest progress
+  if (!localStorage.getItem('riftline-auth') && !sessionStorage.getItem('riftline-auth') && profileKey !== 'riftline-profile') { loadProfileFrom('riftline-profile'); renderCoins(); }
+  renderId();
+});
 function accPreview() {
   const n = cleanName($('#acc-name').value), t = cleanTag($('#acc-tag').value);
   $('#acc-preview').innerHTML = n ? `You'll appear as <b>${esc(n)}</b><span class="ptag">#${esc(t || '????')}</span>` : '';
@@ -152,13 +200,26 @@ function openAccount(first) {
 $('#acc-name').addEventListener('input', accPreview);
 $('#acc-tag').addEventListener('input', e => { e.target.value = cleanTag(e.target.value); accPreview(); });
 $('#acc-roll').addEventListener('click', () => { $('#acc-tag').value = randomTag(); accPreview(); });
-$('#acc-save').addEventListener('click', () => {
+$('#acc-save').addEventListener('click', async () => {
   const n = cleanName($('#acc-name').value), t = cleanTag($('#acc-tag').value);
   if (n.length < 3) { $('#acc-err').textContent = 'Username needs at least 3 characters.'; return; }
   if (t.length < 3) { $('#acc-err').textContent = 'Tag needs 3 to 5 letters or numbers.'; return; }
+  const btn = $('#acc-save'); btn.disabled = true; $('#acc-err').textContent = 'Checking…';
+  // Every username#tag belongs to one player only
+  try {
+    if (account.signedIn) await account.claimId(n, t);
+    else {
+      const owner = await account.ownerOf(n, t);
+      if (owner) throw Object.assign(new Error('taken'), { code: 'taken' });
+    }
+  } catch (e) {
+    btn.disabled = false;
+    if (e.code === 'taken') { $('#acc-err').textContent = account.signedIn ? 'That username#tag is taken. Try a different tag.' : 'That username#tag belongs to someone\'s account. Try a different tag, or log in if it\'s yours.'; return; }
+    if (account.signedIn) toast('Saved on this PC. Your account will update when you are back online.');
+  }
+  btn.disabled = false; $('#acc-err').textContent = '';
   settings.name = n; settings.tag = t; settings.account = true; save();
   renderId();
-  if (account.signedIn) account.setId(n, t).catch(() => toast('Saved on this PC. Could not update your online account right now.'));
   toast(`Welcome, ${n}#${t}`, 2500, true);
   show(app.accountReturn || 'main');
 });
