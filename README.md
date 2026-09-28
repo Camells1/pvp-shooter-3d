@@ -1,6 +1,8 @@
 <p align="center"><img src="assets/logo.png" alt="Riftline" width="560"></p>
 
-**Riftline** is a tactical 3D shooter for **1v1 and 2v2** online with friends, played in first person. It's round-based, with abilities, an economy, and a Valorant-style spike mode. It's also peer-to-peer, so there's **no server to run** and no account to make.
+**Riftline** is a tactical 3D shooter for **1v1 and 2v2** online with friends, played in first person. It's round-based, with abilities, an economy, and a Valorant-style spike mode. It's also peer-to-peer, so there's **no server to run**, and it updates itself.
+
+*A Camel Studios game.*
 
 ## ▶ Download & play
 
@@ -61,6 +63,18 @@ Every match earns **◈ coins**: 50 per match, +100 for a win, +10 per kill and 
 
 Skins: Carbon · Arctic Camo · Tiger · Toxic · Oceanic · Neon Pulse · Solid Gold · Dragonfire · Galaxy
 
+## Updates
+
+Install with **Riftline-Setup** and the game updates itself: it checks GitHub for a new version when it starts, downloads it in the background, and a green **Restart to update** button appears on the main menu. If you close the game instead, the update installs when you quit. The **Portable** exe also updates itself (it downloads the new portable exe next to the old one and switches to it).
+
+## Riftline ID
+
+The first time you open the game you create a **Riftline ID**: a username plus a #tag (like `Camel#CMLS`). Click your ID on the main menu to change it. Your ID shows in lobbies and on the scoreboard.
+
+## Quick Play
+
+Pick your agent on the Quick Play screen, then Find Match. When the match is full you get a 10 second agent select where you can still switch.
+
 ## Maps
 
 Every map is a full-size spike map (about 120m x 88m): attackers start west, defenders east, with an A site and a B site that each have their own look.
@@ -86,6 +100,7 @@ Every map is a full-size spike map (about 120m x 88m): attackers start west, def
 | Pick up gun, or hold to plant/defuse | F |
 | Drop gun | G |
 | Scoreboard | Tab |
+| Back out of menus | Esc |
 | Inspect weapon | Y |
 | First / third person | V |
 | Pause / Fullscreen | Esc / F11 |

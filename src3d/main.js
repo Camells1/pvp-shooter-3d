@@ -20,13 +20,18 @@ if (navigator.userAgent.includes('Electron')) document.body.classList.add('elect
 $('#version').textContent = 'v' + VERSION;
 
 // ---------------------------------------------------------------- settings + profile
-const DEFAULTS = { name: 'Player', sensitivity: 1, fov: 90, volume: 0.6, invertY: false, quality: 'medium', camera: 'first', char: 'blaze', map: 0, rounds: 5, difficulty: 'normal', mode: '1v1', game: 'spike' };
+const DEFAULTS = { name: 'Player', tag: '', account: false, sensitivity: 1, fov: 90, volume: 0.6, invertY: false, quality: 'medium', camera: 'first', char: 'blaze', map: 0, rounds: 5, difficulty: 'normal', mode: '1v1', game: 'spike' };
 const settings = { ...DEFAULTS };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('riftline-settings') || '{}')); } catch (_) {}
 if (!CHARACTERS.some(c => c.id === settings.char)) settings.char = 'blaze';
 if (!MAPS.some(m => m.id === settings.map)) settings.map = 0;
 if (![5, 7, 9].includes(settings.rounds)) settings.rounds = 5;
 const save = () => { try { localStorage.setItem('riftline-settings', JSON.stringify(settings)); } catch (_) {} };
+const TAG_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const randomTag = () => Array.from({ length: 4 }, () => TAG_CHARS[Math.floor(Math.random() * TAG_CHARS.length)]).join('');
+const cleanTag = t => String(t || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
+const cleanName = n => String(n || '').replace(/[^\p{L}\p{N} _.-]/gu, '').replace(/\s+/g, ' ').trim().slice(0, 14);
+if (!cleanTag(settings.tag)) settings.tag = randomTag();
 setVolume(settings.volume);
 
 const profile = { coins: COINS.start, owned: [], equipped: {} };
@@ -56,7 +61,7 @@ window.__app = app;
 window.__stage = stage;
 
 function freshLobby() {
-  return { mode: settings.mode, game: settings.game, map: settings.map, rounds: settings.rounds, difficulty: settings.difficulty, players: [{ id: 'h', name: settings.name, char: settings.char, team: 0, ready: true, isBot: false, skins: mySkins() }] };
+  return { mode: settings.mode, game: settings.game, map: settings.map, rounds: settings.rounds, difficulty: settings.difficulty, players: [{ id: 'h', name: settings.name, tag: settings.tag, char: settings.char, team: 0, ready: true, isBot: false, skins: mySkins() }] };
 }
 
 function show(id) {
@@ -78,11 +83,42 @@ document.addEventListener('mouseover', e => { if (e.target.closest?.('.btn, .cha
 document.addEventListener('click', e => { if (e.target.closest?.('.btn, .char-card, .map-card, .seg button, .offer, .featured, .lk, .ls')) sfx.click(); });
 
 // ---------------------------------------------------------------- main menu
-$('#name').value = settings.name;
-$('#name').addEventListener('input', e => { settings.name = e.target.value.trim().slice(0, 14) || 'Player'; save(); });
+// ---------------------------------------------------------------- Riftline ID (username#tag)
+function renderId() { $('#id-name').textContent = settings.name; $('#id-tag').textContent = '#' + settings.tag; }
+function accPreview() {
+  const n = cleanName($('#acc-name').value), t = cleanTag($('#acc-tag').value);
+  $('#acc-preview').innerHTML = n ? `You'll appear as <b>${esc(n)}</b><span class="ptag">#${esc(t || '????')}</span>` : '';
+}
+function openAccount(first) {
+  app.accountReturn = first ? 'main' : (app.screen || 'main');
+  $('#acc-title').textContent = first ? 'Create your Riftline ID' : 'Edit your Riftline ID';
+  $('#acc-name').value = first && settings.name === 'Player' ? '' : settings.name;
+  $('#acc-tag').value = settings.tag;
+  $('#acc-cancel').classList.toggle('hidden', !!first);
+  $('#acc-err').textContent = '';
+  accPreview();
+  show('account');
+  setTimeout(() => $('#acc-name').focus(), 60);
+}
+$('#acc-name').addEventListener('input', accPreview);
+$('#acc-tag').addEventListener('input', e => { e.target.value = cleanTag(e.target.value); accPreview(); });
+$('#acc-roll').addEventListener('click', () => { $('#acc-tag').value = randomTag(); accPreview(); });
+$('#acc-save').addEventListener('click', () => {
+  const n = cleanName($('#acc-name').value), t = cleanTag($('#acc-tag').value);
+  if (n.length < 3) { $('#acc-err').textContent = 'Username needs at least 3 characters.'; return; }
+  if (t.length < 3) { $('#acc-err').textContent = 'Tag needs 3 to 5 letters or numbers.'; return; }
+  settings.name = n; settings.tag = t; settings.account = true; save();
+  renderId();
+  toast(`Welcome, ${n}#${t}`, 2500, true);
+  show(app.accountReturn || 'main');
+});
+for (const id of ['#acc-name', '#acc-tag']) $(id).addEventListener('keydown', e => { if (e.key === 'Enter') $('#acc-save').click(); });
+renderId();
 
 const actions = {
-  quick() { show('queue'); $('#queue-status').innerHTML = ''; $('#queue-btn').disabled = false; stage.setMode('lineup'); },
+  account() { openAccount(false); },
+  'acc-cancel'() { if (settings.account) show(app.accountReturn || 'main'); },
+  quick() { show('queue'); $('#queue-status').innerHTML = ''; $('#queue-btn').disabled = false; renderQueueAgents(); stage.setMode('select', settings.char); },
   bot() { app.mode = 'bot'; app.isHost = true; app.myId = 'h'; app.lobby = freshLobby(); openSelect(); },
   host() { app.mode = 'online'; startHosting(); },
   join() { app.mode = 'online'; openJoin(); },
@@ -216,6 +252,23 @@ $('#locker-skins').addEventListener('click', e => { const b = e.target.closest('
 
 // ---------------------------------------------------------------- quick play (matchmaking)
 let queueKind = '1v1';
+const AGENT_SELECT = 10; // seconds to pick agents once a match is found
+const hexc = n => '#' + n.toString(16).padStart(6, '0');
+function renderQueueAgents() {
+  const locked = !!app.game;
+  $('#queue-agents').classList.toggle('locked', locked);
+  $('#queue-agents').innerHTML = CHARACTERS.map(c => `<button data-c="${c.id}" class="${c.id === settings.char ? 'sel' : ''}" style="--c:${hexc(c.color)};--a:${hexc(c.accent)}" title="${c.name}: ${c.role}"><span class="dot"></span><span class="an">${c.name}</span><span class="ar">${c.role}</span></button>`).join('');
+}
+$('#queue-agents').addEventListener('click', e => {
+  const b = e.target.closest('button[data-c]'); if (!b || app.game) return;
+  settings.char = b.dataset.c; save();
+  stage.setMode('select', settings.char);
+  // Already in a match lobby: tell the host
+  const me = app.lobby?.players.find(p => p.id === app.myId);
+  if (me) me.char = settings.char;
+  if (app.net && app.lobby) { if (app.isHost) sendLobby(); else app.net.send({ type: 'pick', c: settings.char }); }
+  renderQueueAgents();
+});
 $('#queue-seg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; queueKind = b.dataset.q; $$('#queue-seg button').forEach(x => x.classList.toggle('sel', x === b)); });
 $('#queue-btn').addEventListener('click', async () => {
   closeNet();
@@ -232,12 +285,12 @@ $('#queue-btn').addEventListener('click', async () => {
       app.lobby.mode = queueKind; app.lobby.game = 'spike'; app.lobby.rounds = 5;
       app.lobby.map = queueKind === '2v2' ? [0, 4, 5][Math.floor(Math.random() * 3)] : [0, 1, 2, 3][Math.floor(Math.random() * 4)];
       bindHostNet(pc);
-      pc.onMerged = () => { app.isHost = false; bindGuestNet(pc); pc.send({ type: 'hello', name: settings.name, char: settings.char, skins: mySkins(), auto: true }); status('Joined a match. Waiting for players…'); };
+      pc.onMerged = () => { app.isHost = false; bindGuestNet(pc); pc.send({ type: 'hello', name: settings.name, tag: settings.tag, char: settings.char, skins: mySkins(), auto: true }); status('Joined a match. Waiting for players…'); };
       status(`Waiting for players… (1/${queueKind === '2v2' ? 4 : 2})`);
     } else {
       app.isHost = false; app.myId = pc.myId;
       bindGuestNet(pc);
-      pc.send({ type: 'hello', name: settings.name, char: settings.char, skins: mySkins(), auto: true });
+      pc.send({ type: 'hello', name: settings.name, tag: settings.tag, char: settings.char, skins: mySkins(), auto: true });
       status('Match found! Waiting for the other players…');
     }
   } catch (err) {
@@ -252,16 +305,31 @@ function queueTick() {
   if (!app.queue || !app.isHost || !app.lobby || app.game || app.mode !== 'online' || app.screen !== 'queue') return;
   const need = app.lobby.mode === '2v2' ? 4 : 2;
   const have = app.lobby.players.length;
-  $('#queue-status').innerHTML = `<div class="spinner"></div>Waiting for players… (${have}/${need})`;
   const waited = (performance.now() - app.queue.since) / 1000;
-  if (have >= need || (app.lobby.mode === '2v2' && have >= 2 && waited > 40)) {
+  const full = have >= need || (app.lobby.mode === '2v2' && have >= 2 && waited > 40);
+  if (!full) {
+    app.queue.selectAt = null;
+    if (app.lobby.startIn != null) { app.lobby.startIn = null; sendLobby(); }
+    $('#queue-status').innerHTML = `<div class="spinner"></div>Waiting for players… (${have}/${need})`;
+    return;
+  }
+  // Match found: everyone gets a few seconds to pick an agent
+  app.queue.selectAt ??= performance.now();
+  const left = Math.max(0, Math.ceil(AGENT_SELECT - (performance.now() - app.queue.selectAt) / 1000));
+  if (app.lobby.startIn !== left) { app.lobby.startIn = left; sendLobby(); }
+  showAgentSelect(left);
+  if (left <= 0) {
     for (const p of app.lobby.players) p.ready = true;
     // Balance teams
     app.lobby.players.forEach((p, i) => { p.team = i % 2; });
     hostStart();
   }
 }
-setInterval(queueTick, 500);
+setInterval(queueTick, 250);
+function showAgentSelect(left) {
+  if (app.screen !== 'queue') return;
+  $('#queue-status').innerHTML = `Match found! Pick your agent<span class="count">${left}</span>`;
+}
 
 // ---------------------------------------------------------------- hosting / joining
 function startHosting() {
@@ -302,7 +370,7 @@ function bindHostNet(pc) {
     const size = L.mode === '2v2' ? 2 : 1;
     if (L.players.length >= size * 2 && L.mode === '1v1' && !app.queue) L.mode = '2v2';
     const count = t => L.players.filter(p => p.team === t).length;
-    L.players.push({ id: from, name: String(m.name || 'Player').slice(0, 14), char: CHARACTERS.some(c => c.id === m.char) ? m.char : 'blaze', team: count(0) <= count(1) ? 0 : 1, ready: !!m.auto, isBot: false, skins: sanitizeSkins(m.skins) });
+    L.players.push({ id: from, name: cleanName(m.name) || 'Player', tag: cleanTag(m.tag), char: CHARACTERS.some(c => c.id === m.char) ? m.char : 'blaze', team: count(0) <= count(1) ? 0 : 1, ready: !!m.auto, isBot: false, skins: sanitizeSkins(m.skins) });
     toast(`${String(m.name || 'Player').slice(0, 14)} joined`, 2500, true);
     sendLobby();
   });
@@ -324,6 +392,7 @@ function bindGuestNet(pc) {
     const me = app.lobby.players.find(p => p.id === app.myId);
     if (me) app.myReady = me.ready;
     if (app.screen === 'select') renderSelect();
+    if (app.screen === 'queue' && app.lobby.startIn != null) showAgentSelect(app.lobby.startIn);
   });
   pc.on('start', m => startMatch(m));
 }
@@ -367,7 +436,7 @@ $('#join-btn').addEventListener('click', () => {
   pc.join(code).then(id => {
     if (app.net !== pc) return;
     app.isHost = false; app.myId = id; app.code = code; app.myReady = false; app.lobby = null; app.queue = null;
-    pc.send({ type: 'hello', name: settings.name, char: settings.char, skins: mySkins() });
+    pc.send({ type: 'hello', name: settings.name, tag: settings.tag, char: settings.char, skins: mySkins() });
     openSelect();
   }).catch(err => {
     if (app.net !== pc) return;
@@ -417,7 +486,7 @@ function renderSelect() {
     const ps = L.players.filter(p => p.team === t);
     const rows = ps.map(p => {
       const pc = charById(p.char);
-      return `<div class="pl"><span class="pn">${esc(p.name)}${p.id === app.myId ? ' (you)' : ''}</span><span class="pc" style="color:${hex(pc.color)}">${pc.name}</span>${app.mode === 'online' ? `<span class="rd">${p.id === 'h' ? 'HOST' : p.ready ? 'READY' : ''}</span>` : ''}</div>`;
+      return `<div class="pl"><span class="pn">${esc(p.name)}${p.tag ? `<span class="ptag">#${esc(p.tag)}</span>` : ''}${p.id === app.myId ? ' (you)' : ''}</span><span class="pc" style="color:${hex(pc.color)}">${pc.name}</span>${app.mode === 'online' ? `<span class="rd">${p.id === 'h' ? 'HOST' : p.ready ? 'READY' : ''}</span>` : ''}</div>`;
     });
     for (let i = ps.length; i < size; i++) { rows.push('<div class="pl bot"><span class="pn">Bot (auto-fill)</span><span class="pc">Random</span></div>'); botsNeeded++; }
     return `<div class="team-col ${meP && meP.team === t ? 'mine' : ''}" style="--tc:${TEAM_COLORS[t]}"><h5>${TEAM_NAMES[t]}${L.game === 'spike' ? (t === 0 ? ' · ATTACK FIRST' : ' · DEFEND FIRST') : ''}</h5>${rows.join('')}</div>`;
@@ -478,7 +547,7 @@ $('#ready-btn').addEventListener('click', () => {
 function hostStart() {
   const L = app.lobby, size = L.mode === '2v2' ? 2 : 1;
   const me = L.players.find(p => p.id === 'h'); if (me) { me.skins = mySkins(); me.char = settings.char; }
-  const roster = L.players.map(p => ({ id: p.id, name: p.name, char: p.char, team: p.team, isBot: false, skins: p.skins || {} }));
+  const roster = L.players.map(p => ({ id: p.id, name: p.name, tag: p.tag || '', char: p.char, team: p.team, isBot: false, skins: p.skins || {} }));
   let n = 1;
   for (const t of [0, 1]) {
     for (let i = roster.filter(p => p.team === t).length; i < size; i++) {
@@ -494,7 +563,7 @@ function hostStart() {
 
 function startRange() {
   closeNet();
-  const roster = [{ id: 'h', name: settings.name, char: settings.char, team: 0, isBot: false, skins: mySkins() }];
+  const roster = [{ id: 'h', name: settings.name, tag: settings.tag, char: settings.char, team: 0, isBot: false, skins: mySkins() }];
   startMatch({ roster, map: 99, rounds: 0, difficulty: 'normal', game: 'range' });
 }
 
@@ -602,6 +671,25 @@ function leaveToMenu() {
   renderCoins();
 }
 
+// ---------------------------------------------------------------- auto-update (desktop app only)
+const api = window.electronAPI;
+function renderUpdate(u) {
+  const b = $('#upd-pill');
+  if (!u) return;
+  const show = ['downloading', 'ready', 'manual'].includes(u.status);
+  b.classList.toggle('hidden', !show);
+  b.classList.toggle('ready', u.status === 'ready' || u.status === 'manual');
+  if (u.status === 'downloading') b.textContent = `Downloading v${u.latest} · ${Math.round((u.progress || 0) * 100)}%`;
+  if (u.status === 'ready') b.textContent = `⟳ Restart to update to v${u.latest}`;
+  if (u.status === 'manual') b.textContent = `v${u.latest} is out · Download`;
+  if (u.status === 'ready' && !renderUpdate.told) { renderUpdate.told = true; toast(`Update v${u.latest} is ready. Click the green button to restart.`, 5000, true); }
+}
+if (api?.onUpdate) {
+  api.onUpdate(renderUpdate);
+  api.updateState().then(renderUpdate).catch(() => {});
+  $('#upd-pill').addEventListener('click', () => { if (!app.game) api.installUpdate(); });
+}
+
 // ---------------------------------------------------------------- loop
 addEventListener('resize', () => {
   if (!innerWidth || !innerHeight) return;
@@ -613,6 +701,12 @@ addEventListener('keydown', e => {
   if (e.code === 'F11' && !navigator.userAgent.includes('Electron')) {
     e.preventDefault();
     if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen?.();
+  }
+  // Escape backs out of whatever menu is open
+  if (e.code === 'Escape' && !e.repeat && app.screen) {
+    const ESC = { account: 'acc-cancel', store: 'back', locker: 'back', controls: 'back', settings: 'settings-back', pause: 'resume', queue: 'leave', lobby: 'leave', select: 'leave' };
+    const act = ESC[app.screen];
+    if (act) { e.preventDefault(); actions[act](); }
   }
 });
 addEventListener('beforeunload', () => { try { app.net?.destroy(); } catch (_) {} });
@@ -630,5 +724,6 @@ function frame(now) {
   } else stage.update(dt);
 }
 show('main');
+if (!settings.account) openAccount(true);
 stage.resize(innerWidth, innerHeight);
 requestAnimationFrame(frame);

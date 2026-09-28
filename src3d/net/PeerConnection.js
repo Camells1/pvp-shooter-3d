@@ -4,7 +4,7 @@
 import { VERSION } from '../game/data.js';
 
 // The protocol tag is part of every room id, so different game versions never find each other by accident.
-const PROTO = 'p4';
+const PROTO = 'p5';
 const PREFIX = `riftline-${PROTO}-`;
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const TIMEOUT = 10000;

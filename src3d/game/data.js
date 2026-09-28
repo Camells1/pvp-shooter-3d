@@ -1,6 +1,6 @@
 // Characters, abilities, weapons, shields, skins, economy. Distances are meters, times are seconds.
 
-export const VERSION = '2.3.0';
+export const VERSION = '2.4.0';
 
 // Each fighter has Q and E abilities (cooldowns) and an X ultimate (charged by points).
 export const CHARACTERS = [

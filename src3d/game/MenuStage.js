@@ -5,7 +5,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { CHARACTERS, charById } from './data.js';
-import { CharacterModel, buildGun } from './models.js';
+import { CharacterModel, buildGun, disposeMerged } from './models.js';
 import { getEnvMap } from './envmap.js';
 
 function gridTexture() {
@@ -91,7 +91,7 @@ export class MenuStage {
     if (!this.gunGroup) { this.gunGroup = new THREE.Group(); this.gunGroup.position.set(0, 1.45, 1.5); this.scene.add(this.gunGroup); }
     if (this.gunKey === id + skin) return;
     this.gunKey = id + skin;
-    this.gunGroup.clear();
+    disposeMerged(this.gunGroup); this.gunGroup.clear();
     const g = buildGun(id, 0xff3d5a, skin);
     const box = new THREE.Box3().setFromObject(g);
     const size = box.getSize(new THREE.Vector3()), center = box.getCenter(new THREE.Vector3());

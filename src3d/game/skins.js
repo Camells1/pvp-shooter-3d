@@ -143,7 +143,7 @@ export function skinMats(skin = 'default', accent = 0xff8800) {
       m = { body: M({ map: T('galaxy'), metalness: 0.3, roughness: 0.25, emissiveMap: T('galaxyStars'), emissive: 0xffffff, emissiveIntensity: 1.6 }), metal: M({ color: 0x3a2a5a, metalness: 0.9, roughness: 0.2 }), polymer: M({ map: T('galaxy'), metalness: 0.2, roughness: 0.4, emissiveMap: T('galaxyStars'), emissive: 0xffffff, emissiveIntensity: 1.2 }), accent: M({ color: 0x111111, emissive: 0xb86bff, emissiveIntensity: 2 }), glow: glow(0xff4ad8) };
       break;
     default:
-      m = { body: M({ color: 0x1d2025, metalness: 0.75, roughness: 0.35 }), metal: M({ color: 0x5c636c, metalness: 0.95, roughness: 0.22 }), polymer: M({ color: 0x2e3238, metalness: 0.1, roughness: 0.7 }), accent: M({ color: accent, metalness: 0.4, roughness: 0.35 }), glow: glow(accent) };
+      m = { body: M({ color: 0x474e58, metalness: 0.7, roughness: 0.34 }), metal: M({ color: 0x9aa2ac, metalness: 0.95, roughness: 0.2 }), polymer: M({ color: 0x24282e, metalness: 0.08, roughness: 0.72 }), accent: M({ color: accent, metalness: 0.35, roughness: 0.32 }), glow: glow(accent) };
   }
   for (const mat of Object.values(m)) mat.userData.shared = true;
   cache.set(key, m);

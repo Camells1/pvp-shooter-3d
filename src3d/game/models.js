@@ -1,7 +1,42 @@
 // Procedural character + weapon models with IK arms and procedural animation.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { skinMats } from './skins.js';
+
+// Merge the rigid mesh children of every node that share a material into one mesh per material.
+// Guns and characters are built from dozens of small parts; this cuts their draw calls several times over.
+// Meshes in `keep` (animated or toggled parts), transparent or ordered meshes, and meshes with children stay as they are.
+export function mergeStatic(root, keep = new Set()) {
+  const nodes = [];
+  root.traverse(o => { if (!o.isMesh) nodes.push(o); });
+  for (const node of nodes) {
+    const buckets = new Map();
+    for (const m of node.children) {
+      if (!m.isMesh || m.children.length || keep.has(m) || m.renderOrder || m.material.transparent || !m.visible) continue;
+      const g = m.geometry;
+      if (!g.attributes.normal || !g.attributes.uv || g.morphAttributes?.position) continue;
+      const key = m.material.uuid + '|' + (g.index ? 1 : 0) + '|' + Object.keys(g.attributes).sort().join();
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push(m);
+    }
+    for (const list of buckets.values()) {
+      if (list.length < 2) continue;
+      const geos = list.map(m => { m.updateMatrix(); const c = m.geometry.clone().applyMatrix4(m.matrix); c.clearGroups(); return c; });
+      const merged = mergeGeometries(geos, false);
+      for (const c of geos) c.dispose();
+      if (!merged) continue;
+      merged.userData.merged = true;
+      const mesh = new THREE.Mesh(merged, list[0].material);
+      mesh.castShadow = list.some(m => m.castShadow); mesh.receiveShadow = true;
+      for (const m of list) node.remove(m);
+      node.add(mesh);
+    }
+  }
+  return root;
+}
+// Free geometries created by mergeStatic (the small part geometries are shared and cached)
+export function disposeMerged(root) { root?.traverse(o => { if (o.geometry?.userData.merged) o.geometry.dispose(); }); }
 
 const geoCache = new Map();
 function rb(w, h, d, r = 0.02) {
@@ -12,6 +47,12 @@ function rb(w, h, d, r = 0.02) {
 function caps(r, len) {
   const k = `c${r},${len}`;
   if (!geoCache.has(k)) geoCache.set(k, new THREE.CapsuleGeometry(r, len, 6, 12));
+  return geoCache.get(k);
+}
+// Open-ended tube (you can see through it, e.g. down a scope)
+function tube(rt, rb_, h, seg = 16) {
+  const k = `tu${rt},${rb_},${h},${seg}`;
+  if (!geoCache.has(k)) geoCache.set(k, new THREE.CylinderGeometry(rt, rb_, h, seg, 1, true));
   return geoCache.get(k);
 }
 function cyl(rt, rb_, h, seg = 16) {
@@ -59,16 +100,18 @@ function getReticle() {
   const c = document.createElement('canvas'); c.width = c.height = 128;
   const x = c.getContext('2d');
   x.shadowColor = '#ff2a4a'; x.shadowBlur = 8;
-  x.strokeStyle = '#ff3d5a'; x.lineWidth = 5;
-  x.beginPath(); x.arc(64, 64, 40, 0, Math.PI * 2); x.stroke();
+  x.strokeStyle = '#ff3d5a'; x.lineWidth = 3;
+  x.beginPath(); x.arc(64, 64, 44, 0, Math.PI * 2); x.stroke();
   x.fillStyle = '#ff3d5a';
-  x.beginPath(); x.arc(64, 64, 6, 0, Math.PI * 2); x.fill();
-  for (const [a, b, w, h] of [[62, 12, 4, 14], [62, 102, 4, 14], [12, 62, 14, 4], [102, 62, 14, 4]]) x.fillRect(a, b, w, h);
+  x.beginPath(); x.arc(64, 64, 7, 0, Math.PI * 2); x.fill();
   reticleTex = new THREE.CanvasTexture(c);
   reticleTex.colorSpace = THREE.SRGBColorSpace;
   return reticleTex;
 }
-const holoGlass = new THREE.MeshBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.1, depthWrite: false, side: THREE.DoubleSide });
+// Cut lines, slots and grooves (shared by every skin so details always read)
+const INSET = new THREE.MeshStandardMaterial({ color: 0x0c0e11, metalness: 0.2, roughness: 0.85 });
+INSET.userData.shared = true;
+const holoGlass = new THREE.MeshBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.05, depthWrite: false, side: THREE.DoubleSide });
 let reticleMat = null;
 
 export function buildGun(id, accent = 0xff8800, skin = 'default') {
@@ -91,27 +134,44 @@ export function buildGun(id, accent = 0xff8800, skin = 'default') {
     for (const dz of [-0.015, 0.012]) add(rb(r * 3, 0.006, 0.01, 0.002), m.metal, 0, y, z + dz);
   };
   const port = (y, z, len) => add(rb(0.004, 0.018, len, 0.002), m.metal, -0.034, y, z);
+  // ---- Detail helpers (both sides unless noted). hw = half width of the part they sit on.
+  const seam = (hw, y, z, len) => { for (const s of [1, -1]) add(rb(0.002, 0.003, len, 0.001), INSET, s * hw, y, z); };
+  const pins = (hw, y, zs) => { for (const z of zs) for (const s of [1, -1]) add(cyl(0.0045, 0.0045, 0.003, 10), m.metal, s * (hw + 0.001), y, z, 0, 0, Math.PI / 2); };
+  const slots = (hw, y, z0, n, step, len = 0.024, h = 0.01) => { for (let i = 0; i < n; i++) for (const s of [1, -1]) add(rb(0.003, h, len, h / 2 - 0.0005), INSET, s * hw, y, z0 + i * step); };
+  const panel = (hw, y, z, h, len, mat = m.polymer) => { for (const s of [1, -1]) add(rb(0.004, h, len, 0.0015), mat, s * hw, y, z); };
+  const serrations = (hw, y, z0, n, step, h) => { for (let i = 0; i < n; i++) for (const s of [1, -1]) add(rb(0.002, h, 0.003, 0.0008), INSET, s * hw, y, z0 + i * step); };
+  const gripTex = (y, z, rx, n = 4, w = 0.044) => { for (let i = 0; i < n; i++) add(rb(w, 0.004, 0.052, 0.0015), INSET, 0, y - i * 0.02, z - i * 0.02 * Math.tan(rx), rx); };
+  const chargingHandle = (y, z, w = 0.03) => { add(rb(w, 0.01, 0.018, 0.003), m.metal, 0, y, z); for (const s of [1, -1]) add(rb(0.008, 0.012, 0.016, 0.003), m.metal, s * (w / 2 + 0.003), y, z); };
+  const buttPad = (y, z, h, w, rx) => add(rb(w, h, 0.014, 0.005), INSET, 0, y, z, rx);
   // Holographic sight: frame, tinted glass, glowing reticle. Returns the eye-line point.
   const holo = (y, z) => {
-    add(rb(0.05, 0.016, 0.075, 0.005), m.body, 0, y, z);
-    for (const s of [1, -1]) add(rb(0.008, 0.052, 0.06, 0.003), m.body, 0.027 * s, y + 0.034, z);
-    add(rb(0.062, 0.008, 0.06, 0.003), m.body, 0, y + 0.062, z);
-    add(rb(0.02, 0.012, 0.02, 0.004), m.accent, 0.03, y + 0.035, z - 0.01);
-    const glass = new THREE.Mesh(new THREE.PlaneGeometry(0.046, 0.044), holoGlass);
-    glass.position.set(0, y + 0.035, z + 0.02); g.add(glass);
+    // Slim frame: thin posts and top bar so the window is almost all glass
+    add(rb(0.04, 0.012, 0.05, 0.004), m.body, 0, y, z);
+    for (const s of [1, -1]) add(rb(0.004, 0.05, 0.022, 0.0015), m.body, 0.026 * s, y + 0.031, z + 0.012);
+    add(rb(0.056, 0.004, 0.022, 0.0015), m.body, 0, y + 0.057, z + 0.012);
+    add(rb(0.008, 0.008, 0.012, 0.002), m.accent, 0.018, y + 0.009, z - 0.012);
+    const glass = new THREE.Mesh(new THREE.PlaneGeometry(0.048, 0.046), holoGlass);
+    glass.position.set(0, y + 0.033, z + 0.02); g.add(glass);
     reticleMat ||= new THREE.MeshBasicMaterial({ map: getReticle(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, side: THREE.DoubleSide });
-    const ret = new THREE.Mesh(new THREE.PlaneGeometry(0.03, 0.03), reticleMat);
+    const ret = new THREE.Mesh(new THREE.PlaneGeometry(0.014, 0.014), reticleMat);
     ret.position.set(0, y + 0.035, z + 0.021); ret.renderOrder = 10; g.add(ret);
     return new THREE.Vector3(0, y + 0.035, z);
   };
   // Scope tube with glass
   const scope = (y, z, len, r) => {
-    add(cyl(r, r, len, 16), m.body, 0, y, z, Math.PI / 2);
-    add(cyl(r * 1.25, r, 0.05, 16), m.body, 0, y, z + len / 2, Math.PI / 2);
-    add(cyl(r * 1.15, r * 1.15, 0.035, 16), m.body, 0, y, z - len / 2, Math.PI / 2);
-    add(cyl(r * 1.05, r * 1.05, 0.004, 16), m.glow, 0, y, z + len / 2 + 0.026, Math.PI / 2);
-    add(cyl(0.012, 0.012, 0.03, 10), m.metal, 0, y + r + 0.012, z);
-    add(cyl(0.012, 0.012, 0.03, 10), m.metal, r + 0.012, y, z, 0, 0, Math.PI / 2);
+    // Open tubes so you look straight through the scope instead of at a solid cap
+    add(tube(r, r, len, 20), m.body, 0, y, z, Math.PI / 2);
+    add(tube(r * 1.25, r, 0.05, 20), m.body, 0, y, z + len / 2, Math.PI / 2);
+    add(tube(r * 1.15, r * 1.15, 0.035, 20), m.body, 0, y, z - len / 2, Math.PI / 2);
+    add(tor(r * 1.22, 0.002, Math.PI * 2), m.glow, 0, y, z + len / 2 + 0.026);
+    const lens = new THREE.Mesh(new THREE.CircleGeometry(r * 1.2, 20), holoGlass);
+    lens.position.set(0, y, z + len / 2); g.add(lens);
+    reticleMat ||= new THREE.MeshBasicMaterial({ map: getReticle(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, side: THREE.DoubleSide });
+    const ret = new THREE.Mesh(new THREE.PlaneGeometry(r * 0.9, r * 0.9), reticleMat);
+    ret.position.set(0, y, z + len / 2 + 0.001); ret.renderOrder = 10; g.add(ret);
+    // Low-profile turrets so they don't poke into the sight picture
+    add(cyl(0.009, 0.009, 0.012, 10), m.metal, 0, y + r + 0.004, z + len * 0.2);
+    add(cyl(0.009, 0.009, 0.012, 10), m.metal, r + 0.004, y, z + len * 0.2, 0, 0, Math.PI / 2);
     for (const dz of [-len * 0.3, len * 0.3]) add(rb(0.02, 0.03, 0.02, 0.004), m.metal, 0, y - r - 0.012, z + dz);
     return new THREE.Vector3(0, y, z);
   };
@@ -130,6 +190,11 @@ export function buildGun(id, accent = 0xff8800, skin = 'default') {
     add(rb(0.008, 0.014, 0.01, 0.003), m.glow, 0, 0.075, 0.16);
     add(rb(0.03, 0.014, 0.012, 0.003), m.body, 0, 0.074, -0.02);
     add(rb(0.008, 0.008, 0.008, 0.002), m.glow, -0.009, 0.08, -0.02); add(rb(0.008, 0.008, 0.008, 0.002), m.glow, 0.009, 0.08, -0.02);
+    serrations(0.0255, 0.045, 0.13, 4, 0.008, 0.03);
+    seam(0.0255, 0.01, 0.07, 0.2);
+    pins(0.022, -0.005, [0.0, 0.06]);
+    slots(0.0225, -0.012, 0.1, 2, 0.02, 0.012, 0.006);
+    add(rb(0.02, 0.012, 0.012, 0.003), m.metal, 0, 0.012, -0.05, 0.4); // hammer
     muzzle = new THREE.Vector3(0, 0.035, 0.22);
     fore = new THREE.Vector3(0.02, -0.075, 0.02);
     sight = new THREE.Vector3(0, 0.08, -0.02);
@@ -146,6 +211,12 @@ export function buildGun(id, accent = 0xff8800, skin = 'default') {
     add(rb(0.03, 0.06, 0.03, 0.008), m.polymer, 0, -0.03, 0.12);
     add(rb(0.012, 0.012, 0.012, 0.003), m.glow, 0, 0.08, 0.1);
     add(rb(0.03, 0.014, 0.012, 0.003), m.body, 0, 0.074, -0.03);
+    serrations(0.0265, 0.045, -0.03, 5, 0.008, 0.035);
+    seam(0.0265, 0.008, 0.06, 0.18);
+    pins(0.023, -0.01, [0.0, 0.09]);
+    gripTex(-0.06, -0.01, 0.18, 5, 0.043);
+    for (const s of [1, -1]) add(rb(0.004, 0.03, 0.02, 0.002), m.accent, s * 0.024, -0.2, -0.023, 0.18); // mag base grips
+    add(rb(0.05, 0.012, 0.024, 0.004), m.polymer, 0, -0.005, -0.06); // folding brace
     muzzle = new THREE.Vector3(0, 0.035, 0.25);
     fore = new THREE.Vector3(0, -0.05, 0.12);
     sight = new THREE.Vector3(0, 0.082, -0.03);
@@ -162,6 +233,11 @@ export function buildGun(id, accent = 0xff8800, skin = 'default') {
     add(rb(0.012, 0.018, 0.012, 0.003), m.glow, 0, 0.09, 0.33);
     add(rb(0.028, 0.016, 0.014, 0.003), m.body, 0, 0.09, -0.04);
     add(rb(0.014, 0.02, 0.02, 0.003), m.metal, 0, 0.06, -0.07, -0.4);
+    for (const s of [1, -1]) add(rb(0.004, 0.09, 0.045, 0.004), m.accent, s * 0.025, -0.06, -0.04, 0.35); // grip panels
+    gripTex(-0.04, -0.035, 0.35, 4, 0.05);
+    pins(0.025, 0.03, [-0.03, 0.03]);
+    add(tor(0.036, 0.004, Math.PI * 2), m.metal, 0, 0.025, 0.116); // cylinder face ring
+    for (const s of [1, -1]) add(rb(0.003, 0.012, 0.2, 0.001), INSET, s * 0.0205, 0.045, 0.24); // barrel flutes
     muzzle = new THREE.Vector3(0, 0.045, 0.37);
     fore = new THREE.Vector3(0.02, -0.075, 0.0);
     sight = new THREE.Vector3(0, 0.096, -0.04);
@@ -181,6 +257,13 @@ export function buildGun(id, accent = 0xff8800, skin = 'default') {
     for (const s of [1, -1]) add(rb(0.008, 0.012, 0.2, 0.003), m.metal, 0.022 * s, 0.0, -0.14);
     add(rb(0.05, 0.08, 0.02, 0.006), m.polymer, 0, -0.01, -0.24);
     rail(0.14, 0.074, 0.11);
+    seam(0.0335, 0.02, 0.1, 0.32);
+    pins(0.0325, 0.0, [0.02, 0.18]);
+    slots(0.0345, 0.02, 0.27, 2, 0.035, 0.022, 0.01);
+    chargingHandle(0.05, 0.2, 0.024);
+    gripTex(-0.05, -0.012, 0.3, 3, 0.043);
+    for (let i = 0; i < 3; i++) add(rb(0.042, 0.005, 0.052, 0.002), INSET, 0, -0.06 - i * 0.04, 0.12 + i * 0.005, 0.12); // mag ribs
+    buttPad(-0.01, -0.252, 0.08, 0.05, 0);
     sight = holo(0.082, 0.06); sightType = 'holo';
     muzzle = new THREE.Vector3(0, 0.03, 0.47);
     fore = new THREE.Vector3(0, -0.04, 0.22);
@@ -199,6 +282,15 @@ export function buildGun(id, accent = 0xff8800, skin = 'default') {
     add(rb(0.054, 0.1, 0.03, 0.01), m.body, 0, -0.06, -0.33, -0.12);
     for (let i = 0; i < 4; i++) add(cyl(0.008, 0.008, 0.04, 8), m.glow, 0.036, 0.0, -0.02 + i * 0.03, 0, 0, Math.PI / 2);
     rail(0.1, 0.074, 0.05);
+    seam(0.0355, 0.02, 0.05, 0.24);
+    pins(0.035, 0.0, [-0.03, 0.1]);
+    // Heat shield over the barrel
+    add(rb(0.05, 0.012, 0.22, 0.004), m.body, 0, 0.072, 0.48);
+    for (let i = 0; i < 5; i++) add(rb(0.052, 0.004, 0.016, 0.0015), INSET, 0, 0.0785, 0.4 + i * 0.04);
+    add(rb(0.03, 0.02, 0.02, 0.005), m.metal, 0, 0.03, 0.64); // barrel clamp
+    gripTex(-0.05, -0.035, 0.3, 3, 0.046);
+    buttPad(-0.06, -0.345, 0.1, 0.055, -0.12);
+    add(rb(0.04, 0.016, 0.14, 0.005), m.body, 0, 0.018, -0.2, -0.12); // cheek rest
     sight = holo(0.082, 0.03); sightType = 'holo';
     muzzle = new THREE.Vector3(0, 0.045, 0.68);
     fore = new THREE.Vector3(0, -0.02, 0.36);
@@ -222,6 +314,18 @@ export function buildGun(id, accent = 0xff8800, skin = 'default') {
     add(rb(0.054, 0.11, 0.025, 0.008), m.body, 0, -0.02, -0.325, -0.06);
     add(rb(0.03, 0.01, 0.2, 0.003), m.accent, 0, 0.038, -0.19, -0.06);
     rail(0.2, 0.074, 0.1);
+    seam(0.0335, 0.02, 0.08, 0.34);
+    pins(0.0325, 0.0, [0.0, 0.2]);
+    slots(0.0355, 0.02, 0.27, 4, 0.06, 0.03, 0.012);
+    add(rb(0.052, 0.03, 0.09, 0.008), m.body, 0, -0.04, 0.13); // mag well flare
+    for (let i = 0; i < 3; i++) add(rb(0.042, 0.005, 0.072, 0.002), INSET, 0, -0.08 - i * 0.035, 0.135 + i * 0.012, 0.12 + i * 0.1); // mag ribs
+    add(rb(0.026, 0.032, 0.034, 0.006), m.metal, 0, 0.03, 0.5); // gas block
+    chargingHandle(0.064, -0.08);
+    add(rb(0.02, 0.02, 0.03, 0.005), m.metal, 0.036, 0.035, 0.0); // bolt release
+    gripTex(-0.045, -0.035, 0.3, 4, 0.043);
+    add(rb(0.04, 0.02, 0.12, 0.006), m.body, 0, 0.045, -0.2, -0.06); // cheek riser
+    buttPad(-0.02, -0.34, 0.11, 0.056, -0.06);
+    for (const s of [1, -1]) add(cyl(0.006, 0.006, 0.01, 8), m.metal, s * 0.026, -0.03, -0.3, 0, 0, Math.PI / 2); // sling mount
     sight = holo(0.082, 0.06); sightType = 'holo';
     muzzle = new THREE.Vector3(0, 0.03, 0.69);
     fore = new THREE.Vector3(0, -0.03, 0.34);
@@ -238,6 +342,13 @@ export function buildGun(id, accent = 0xff8800, skin = 'default') {
     add(rb(0.05, 0.08, 0.26, 0.02), m.accent, 0, -0.01, -0.2, -0.08);
     add(rb(0.052, 0.09, 0.025, 0.008), m.body, 0, -0.02, -0.33, -0.08);
     add(rb(0.035, 0.08, 0.05, 0.01), m.polymer, 0, -0.06, 0.1);
+    seam(0.0305, 0.02, 0.08, 0.32);
+    pins(0.03, 0.0, [0.0, 0.18]);
+    slots(0.0325, -0.01, 0.24, 4, 0.06, 0.03, 0.012);
+    for (let i = 0; i < 3; i++) add(rb(0.004, 0.02, 0.1, 0.002), INSET, 0.0205 * (i % 2 ? 1 : -1), 0.035, 0.62); // barrel flutes
+    gripTex(-0.045, -0.035, 0.3, 4, 0.041);
+    add(rb(0.04, 0.02, 0.12, 0.006), m.body, 0, 0.04, -0.2, -0.08); // cheek riser
+    buttPad(-0.02, -0.345, 0.09, 0.052, -0.08);
     sight = scope(0.1, 0.08, 0.2, 0.022); sightType = 'scope';
     muzzle = new THREE.Vector3(0, 0.035, 0.84);
     fore = new THREE.Vector3(0, -0.04, 0.34);
@@ -262,6 +373,16 @@ export function buildGun(id, accent = 0xff8800, skin = 'default') {
     add(rb(0.064, 0.12, 0.03, 0.008), m.body, 0, -0.02, -0.37, -0.06);
     for (let i = 0; i < 5; i++) add(rb(0.094, 0.01, 0.01, 0.003), m.glow, 0, 0.04, -0.05 + i * 0.05);
     rail(0.16, 0.107, 0.02);
+    seam(0.0455, 0.02, 0.08, 0.4);
+    pins(0.045, 0.0, [-0.08, 0.05, 0.22]);
+    // Carry handle
+    for (const z of [0.16, 0.28]) add(rb(0.014, 0.05, 0.014, 0.004), m.metal, 0, 0.115, z);
+    add(rb(0.026, 0.014, 0.14, 0.006), m.polymer, 0, 0.145, 0.22);
+    // Feed tray cover hinge
+    add(cyl(0.008, 0.008, 0.094, 10), m.metal, 0, 0.095, -0.05, 0, 0, Math.PI / 2);
+    gripTex(-0.05, -0.055, 0.3, 4, 0.046);
+    buttPad(-0.02, -0.39, 0.12, 0.066, -0.06);
+    add(rb(0.05, 0.024, 0.14, 0.008), m.body, 0, 0.05, -0.23, -0.06); // cheek rest
     sight = holo(0.115, -0.01); sightType = 'holo';
     muzzle = new THREE.Vector3(0, 0.03, 0.76);
     fore = new THREE.Vector3(0, -0.03, 0.34);
@@ -281,12 +402,23 @@ export function buildGun(id, accent = 0xff8800, skin = 'default') {
     add(rb(0.03, 0.03, 0.12, 0.01), m.accent, 0, 0.05, -0.2, -0.08);
     add(rb(0.058, 0.12, 0.025, 0.008), m.body, 0, -0.02, -0.365, -0.08);
     for (const s of [1, -1]) { const leg = add(rb(0.01, 0.16, 0.01, 0.003), m.metal, 0.02 * s, -0.03, 0.42); leg.rotation.set(-1.2, 0, 0.2 * s); }
+    seam(0.0335, 0.02, 0.1, 0.38);
+    pins(0.0325, 0.0, [0.0, 0.2]);
+    for (let i = 0; i < 4; i++) add(rb(0.004, 0.02, 0.26, 0.002), INSET, i < 2 ? 0.0175 : -0.0175, 0.035 + (i % 2 ? 0.008 : -0.008), 0.5); // fluted barrel
+    // Bolt handle with a ball knob, angled down
+    const bolt = add(cyl(0.007, 0.007, 0.07, 8), m.metal, 0.05, 0.03, 0.02, 0, 0, Math.PI / 2 + 0.5);
+    void bolt;
+    add(sph(0.016, 10, 8), m.metal, 0.08, 0.012, 0.02);
+    slots(0.034, -0.02, 0.1, 4, 0.05, 0.026, 0.01);
+    add(rb(0.02, 0.02, 0.04, 0.006), m.metal, 0, -0.045, -0.3, -0.08); // monopod
+    gripTex(-0.05, 0.0, 0.28, 4, 0.041);
+    buttPad(-0.02, -0.385, 0.12, 0.058, -0.08);
     sight = scope(0.12, 0.1, 0.28, 0.032); sightType = 'scope';
     muzzle = new THREE.Vector3(0, 0.035, 0.8);
     fore = new THREE.Vector3(0, -0.04, 0.34);
   }
   g.userData = { muzzle, grip, fore, sight, sightType };
-  return g;
+  return mergeStatic(g);
 }
 
 // ---------------------------------------------------------------- Shield bubble
@@ -328,6 +460,11 @@ export class CharacterModel {
     this.weaponId = null;
     this._build();
     this.setWeapon('classic');
+    // Merge rigid parts per bone; keep everything the animation code touches directly
+    const keep = new Set();
+    const collect = v => { if (v?.isMesh) keep.add(v); else if (Array.isArray(v)) v.forEach(collect); else if (v && typeof v === 'object' && !v.isObject3D && !v.isMaterial && Object.getPrototypeOf(v) === Object.prototype) Object.values(v).forEach(collect); };
+    for (const v of Object.values(this)) collect(v);
+    mergeStatic(this.body, keep);
   }
 
   _build() {
@@ -515,12 +652,22 @@ export class CharacterModel {
     }
   }
 
+  // Far-away characters skip the shadow pass (they are tiny on screen anyway)
+  setShadow(on) {
+    if (on === this.shadowOn) return;
+    this.shadowOn = on;
+    this.shadowMeshes ||= (() => { const l = []; this.body.traverse(o => { if (o.isMesh && o.castShadow) l.push(o); }); return l; })();
+    for (const m of this.shadowMeshes) m.castShadow = on;
+    this.gun?.traverse(o => { if (o.isMesh) o.castShadow = on; });
+  }
+
   setWeapon(id, skin = 'default') {
     if (id === this.weaponId && skin === this.skinId) return;
     this.weaponId = id; this.skinId = skin;
-    if (this.gun) this.gunMount.remove(this.gun);
+    if (this.gun) { this.gunMount.remove(this.gun); disposeMerged(this.gun); }
     this.gun = buildGun(id, this.char.accent, skin);
     this.gunMount.add(this.gun);
+    if (this.shadowOn === false) this.gun.traverse(o => { if (o.isMesh) o.castShadow = false; });
     // Sidearms are held closer to the chest
     const side = SIDEARMS.has(id);
     this.gunBase.set(side ? -0.07 : -0.13, side ? 0.16 : 0.13, side ? 0.36 : 0.28);

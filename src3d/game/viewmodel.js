@@ -1,14 +1,15 @@
 // First-person viewmodel: hands + gun rendered in their own pass so they never clip into walls.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { buildGun, SIDEARMS } from './models.js';
+import { disposeMerged, buildGun, SIDEARMS } from './models.js';
 import { weaponById } from './data.js';
 
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0), _q = new THREE.Quaternion();
 
 // Hip positions in camera space (x right, y up, -z forward). ADS is computed per gun from its sight.
 const HIP = { primary: [0.23, -0.24, -0.66], sidearm: [0.2, -0.2, -0.52] };
-const EYE_RELIEF = { holo: 0.34, iron: 0.42, scope: 0.3 };
+// Farther from the eye = the sight takes up less of the screen
+const EYE_RELIEF = { holo: 0.5, iron: 0.46, scope: 0.4 };
 
 export class ViewModel {
   constructor(envMap) {
@@ -74,7 +75,7 @@ export class ViewModel {
     if (id === this.weaponId && skin === this.skin) return;
     if (this.weaponId && id !== this.weaponId) this.switchT = 1;
     this.weaponId = id; this.skin = skin;
-    if (this.gun) this.gunHolder.remove(this.gun);
+    if (this.gun) { this.gunHolder.remove(this.gun); disposeMerged(this.gun); }
     this.gun = buildGun(id, this.char?.accent ?? 0xff8800, skin);
     this.gun.rotation.y = Math.PI; // gun is modelled facing +Z; the camera looks down -Z
     this.gun.traverse(o => { o.castShadow = false; o.receiveShadow = false; });

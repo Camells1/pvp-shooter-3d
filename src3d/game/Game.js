@@ -14,7 +14,7 @@ import { weaponById, charById, CHARACTERS, SHIELDS, ECON, ROUND, SPIKE, PICKUP_H
 import { buildMap } from './maps.js';
 import { Player } from './Player.js';
 import { Bot, Dummy, botShopping } from './Bot.js';
-import { CharacterModel, buildGun, buildSpike } from './models.js';
+import { CharacterModel, buildGun, buildSpike, disposeMerged } from './models.js';
 import { Effects } from './effects.js';
 import { getEnvMap } from './envmap.js';
 import { ViewModel } from './viewmodel.js';
@@ -197,7 +197,7 @@ export class Game {
   _makeEnt(r) {
     const char = charById(r.char);
     const local = r.id === this.myId || (r.isBot && this.isHost);
-    const E = { id: r.id, name: r.name, team: r.team, char, isBot: !!r.isBot, owner: r.isBot ? 'h' : r.id, local, alive: true, connected: true, kills: 0, deaths: 0, skins: r.skins || {}, dummy: r.dummy };
+    const E = { id: r.id, name: r.name, tag: r.tag || '', team: r.team, char, isBot: !!r.isBot, owner: r.isBot ? 'h' : r.id, local, alive: true, connected: true, kills: 0, deaths: 0, skins: r.skins || {}, dummy: r.dummy };
     if (local) { E.sim = new Player(char, this.world); E.sim.skins = E.skins; E.sim.inv.sidearm.skin = E.skins.classic || 'default'; }
     else E.remote = new RemotePlayer(char);
     E.st = E.sim || E.remote;
@@ -362,7 +362,7 @@ export class Game {
       rstart: m => this._onRoundStart(m),
       rs: m => this._onRoundState(m),
       die: m => this._onDie(m),
-      hit: m => { const E = this.ents.get(m.target); if (E && E.local) this._applyDamage(E, m.dmg, m.head, m.by, m.w, m.from); },
+      hit: m => { const E = this.ents.get(m.target); if (E && E.local) this._applyDamage(E, m.dmg, m.head, m.by, m.w, m.src); },
       heal: m => { const E = this.ents.get(m.target); if (E && E.local && E.alive) { E.sim.heal(m.n); if (E === this.me) sfx.ability('heal'); } },
       shot: m => this._onRemoteShot(m),
       ev: m => this._onWall(m),
@@ -396,7 +396,8 @@ export class Game {
       reviveReq: (m, from) => this.isHost && this._host('reviveReq', m, from),
       loaded: (m, from) => this.isHost && this.loaded.add(from)
     };
-    if (this.net) for (const t of Object.keys(this.H)) this.net.on(t, (m, from) => this.H[t](m, from));
+    // A bad message from someone else must never take this game down
+    if (this.net) for (const t of Object.keys(this.H)) this.net.on(t, (m, from) => { try { this.H[t](m, from); } catch (err) { console.error('net message failed', t, err); } });
   }
 
   _bcast(msg) { this.net?.send(msg); this.H[msg.type](msg, this.myId); }
@@ -575,7 +576,7 @@ export class Game {
     Object.assign(this.credits, m.credits);
     if (m.sides) this.side = m.sides;
     this.targetSite = m.target;
-    for (const d of this.drops.values()) this.scene.remove(d.group);
+    for (const d of this.drops.values()) { this.scene.remove(d.group); disposeMerged(d.group); }
     this.drops.clear();
     for (const w of this.walls) this._removeWall(w);
     this.walls = [];
@@ -837,7 +838,7 @@ export class Game {
       sfx.hurt();
       this.vm.flinch();
       this.shake = Math.min(1, this.shake + 0.4);
-      const ang = Math.atan2(-(from[0] - s.pos.x), -(from[2] - s.pos.z)) - this.yaw;
+      const ang = Array.isArray(from) ? Math.atan2(-(from[0] - s.pos.x), -(from[2] - s.pos.z)) - this.yaw : 0;
       this.dmgAngle = -ang;
       this.hud.hurt();
     }
@@ -847,7 +848,7 @@ export class Game {
   // Deal damage to T on behalf of shooter id `by` (routes to T's owner)
   _dealDamage(T, dmg, head, by, wid, from) {
     if (T.local) this._applyDamage(T, dmg, head, by, wid, from);
-    else this._sendToOwner(T, { type: 'hit', target: T.id, dmg: Math.round(dmg * 10) / 10, head, by, w: wid, from });
+    else this._sendToOwner(T, { type: 'hit', target: T.id, dmg: Math.round(dmg * 10) / 10, head, by, w: wid, src: from });
   }
 
   // ------------------------------------------------------------ shooting
@@ -996,16 +997,18 @@ export class Game {
   _localEvents(E) {
     const s = E.sim;
     const isMe = E === this.me;
-    for (const ev of s.events) {
+    const events = s.events.splice(0);
+    for (const ev of events) {
       switch (ev.type) {
         case 'jump': if (isMe) sfx.jump(); break;
         case 'land': if (isMe) { sfx.land(); this.vm.land(); } break;
         case 'reload': if (isMe) sfx.reload(); break;
         case 'reloaded': if (isMe) sfx.reloaded(); break;
-        case 'ab': this._resolveAbility(E, ev); break;
+        case 'ab':
+          try { this._resolveAbility(E, ev); } catch (err) { console.error('ability failed', ev.id, err); }
+          break;
       }
     }
-    s.events.length = 0;
   }
 
   _aimPoint(ev, maxD) {
@@ -1024,7 +1027,7 @@ export class Game {
     switch (id) {
       case 'dash': case 'shield': case 'overclock': case 'fortify': case 'cloak':
         this._bcast({ type: 'fx', k: id, id: by }); break;
-      case 'blink': this._bcast({ type: 'fx', k: 'blink', id: by, from: ev.from, to: ev.to }); break;
+      case 'blink': this._bcast({ type: 'fx', k: 'blink', id: by, a: ev.from, b: ev.to }); break;
       case 'wall': this._bcast({ type: 'ev', k: 'wall', id: by, x: r3(ev.x), y: r3(ev.y), z: r3(ev.z), alongX: ev.alongX }); break;
       case 'firebomb': this._bcast({ type: 'zone', kind: 'fire', pos: this._aimPoint(ev, 22), r: 3.5, dur: 4, dps: 28, team, by, ab: id }); break;
       case 'storm': this._bcast({ type: 'zone', kind: 'storm', pos: this._aimPoint(ev, 40), r: 6, dur: 5, dps: 22, slow: 0.35, team, by, ab: id }); break;
@@ -1032,7 +1035,7 @@ export class Game {
       case 'field': this._bcast({ type: 'zone', kind: 'heal', pos, r: 5, dur: 6, hps: 12, team, by, ab: id }); break;
       case 'rocket': {
         const tr = this._trace(E, V(ev.eye), V(ev.aim).normalize(), 120);
-        this._bcast({ type: 'fx', k: 'rocket', id: by, from: [ev.eye.x, ev.eye.y, ev.eye.z], to: [r3(tr.point.x), r3(tr.point.y), r3(tr.point.z)] });
+        this._bcast({ type: 'fx', k: 'rocket', id: by, a: [r3(ev.eye.x), r3(ev.eye.y), r3(ev.eye.z)], b: [r3(tr.point.x), r3(tr.point.y), r3(tr.point.z)] });
         this._bcast({ type: 'aoe', kind: 'blast', pos: [r3(tr.point.x), r3(tr.point.y), r3(tr.point.z)], r: 5, dmg: 130, team, by, ab: id });
         break;
       }
@@ -1076,11 +1079,11 @@ export class Game {
     const near = this.camera.position.distanceTo(at) < 35;
     switch (m.k) {
       case 'dash': this.fx.burst(at, color, 25, 3, 0.4, 0); this.fx.ring(foot, color, 1.5); if (near) sfx.ability('dash'); break;
-      case 'blink': this.fx.blink(m.from, m.to, color); if (E === this.me) this.camBack = 0.5; if (near) sfx.ability('blink'); break;
+      case 'blink': if (m.a && m.b) this.fx.blink(m.a, m.b, color); if (E === this.me) this.camBack = 0.5; if (near) sfx.ability('blink'); break;
       case 'shield': case 'overclock': case 'fortify':
         this.fx.ring(foot, color); this.fx.burst(at, color, 30, 3, 0.5, -2); if (near) sfx.ability('shield'); break;
       case 'cloak': this.fx.burst(at, 0xb877ff, 40, 2, 0.8, -1); if (near) sfx.ability('blink'); break;
-      case 'rocket': this.fx.tracer(V(m.from), V(m.to), 0xffa040, 0.12); break;
+      case 'rocket': if (m.a && m.b) this.fx.tracer(V(m.a), V(m.b), 0xffa040, 0.12); break;
       case 'chain': this.fx.beam(m.pts.map(V), 0x7ff6ff); if (near) sfx.ability('zap'); break;
       case 'revive': this.fx.ring(foot, 0x39ff8a, 4); break;
       case 'reveal':
@@ -1308,7 +1311,7 @@ export class Game {
   _onTaken(m) {
     const d = this.drops.get(m.drop);
     if (!d) return;
-    this.scene.remove(d.group);
+    this.scene.remove(d.group); disposeMerged(d.group);
     this.drops.delete(m.drop);
     const E = this.ents.get(m.by);
     if (E && E.local) {
@@ -1459,6 +1462,7 @@ export class Game {
       m.root.position.set(st.pos.x, st.pos.y, st.pos.z);
       m.setWeapon(st.weaponId, E.local ? E.sim.skinId : E.remote.skinId);
       m.update(dt, { vx: st.vel.x, vz: st.vel.z, yaw: st.yaw, pitch: st.pitch, grounded: st.grounded, dead: !E.alive || st.dead, reload: st.reloadProgress, shield: E.local ? st.shieldT > 0 : st.shieldOn, kneel: E.local ? E.sim.channeling : E.remote.channeling });
+      m.setShadow(this.camera.position.distanceToSquared(m.root.position) < 1600);
       const cloaked = E.local ? E.sim.cloaked : E.remote.cloaked;
       const hideCloak = cloaked && E.team !== this.myTeam;
       m.root.visible = E.connected && (E.local || E.remote.hasState || rs.phase !== 'wait') && !hideCloak;
@@ -1685,7 +1689,7 @@ export class Game {
   }
 
   _scoreboard() {
-    const row = E => `<tr class="${E === this.me ? 'me' : ''} ${E.alive ? '' : 'dead'}"><td><span style="color:${hexs(E.char.color)}">■</span> ${esc(E.name)}</td><td>${E.char.name}</td><td>${E.kills}</td><td>${E.deaths}</td><td>${E.team === this.myTeam && !this.isRange ? '¤ ' + (this.credits[E.id] ?? 0).toLocaleString() : ''}</td></tr>`;
+    const row = E => `<tr class="${E === this.me ? 'me' : ''} ${E.alive ? '' : 'dead'}"><td><span style="color:${hexs(E.char.color)}">■</span> ${esc(E.name)}${E.tag ? `<span class="ptag">#${esc(E.tag)}</span>` : ''}</td><td>${E.char.name}</td><td>${E.kills}</td><td>${E.deaths}</td><td>${E.team === this.myTeam && !this.isRange ? '¤ ' + (this.credits[E.id] ?? 0).toLocaleString() : ''}</td></tr>`;
     const team = t => this._team(t).filter(E => !E.dummy && E.connected);
     const sec = (t, label, color) => `<tr class="hdr"><td colspan="5" style="color:${color}">${label}</td></tr>` + team(t).sort((a, b) => b.kills - a.kills).map(row).join('');
     return `<table><tr class="cols"><td>PLAYER</td><td>FIGHTER</td><td>K</td><td>D</td><td>CREDITS</td></tr>${sec(this.myTeam, 'YOUR TEAM', TEAM_COLORS[0])}${this.isRange ? '' : sec(1 - this.myTeam, 'ENEMY TEAM', TEAM_COLORS[1])}</table>`;

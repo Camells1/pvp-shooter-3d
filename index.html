@@ -23,6 +23,7 @@
     <!-- MAIN MENU -->
     <section class="screen" id="s-main">
       <div class="topbar">
+        <button class="upd hidden" id="upd-pill"></button>
         <div class="coins" title="Coins: earned by playing matches, spent in the Shop">◈ <span id="coin-count">0</span></div>
       </div>
       <div class="main-top">
@@ -36,9 +37,10 @@
           <rect x="174" y="120" width="44" height="6" fill="#ff3d5a"/>
         </svg>
         <div class="tag">TACTICAL 1v1 · 2v2 · PEER-TO-PEER</div>
+        <div class="studio">A CAMEL STUDIOS GAME</div>
       </div>
       <div class="main-bottom">
-        <label class="name-field">CALLSIGN <input id="name" maxlength="14" spellcheck="false" /></label>
+        <button class="id-chip" data-act="account" title="Your Riftline ID. Click to edit."><span class="id-name" id="id-name">Player</span><span class="id-tag" id="id-tag">#0000</span><span class="id-edit">✎</span></button>
         <div class="main-row">
           <button class="btn big red" data-act="quick">Quick Play</button>
           <button class="btn big green" data-act="bot">Play vs Bots</button>
@@ -57,12 +59,35 @@
       <div class="version" id="version"></div>
     </section>
 
+    <!-- ACCOUNT (Riftline ID) -->
+    <section class="screen dim" id="s-account">
+      <div class="panel account">
+        <h2 id="acc-title">Create your Riftline ID</h2>
+        <p class="muted">This is how other players see you. Your tag makes your ID unique, like <b>Camel#CMLS</b>.</p>
+        <div class="acc-row">
+          <label>USERNAME<input id="acc-name" maxlength="14" spellcheck="false" autocomplete="off" placeholder="3-14 characters" /></label>
+          <span class="acc-hash">#</span>
+          <label>TAG<input id="acc-tag" maxlength="5" spellcheck="false" autocomplete="off" placeholder="3-5" /></label>
+          <button class="btn" id="acc-roll" title="Random tag">⟳</button>
+        </div>
+        <div class="acc-preview" id="acc-preview"></div>
+        <div class="acc-err" id="acc-err"></div>
+        <div class="acc-btns">
+          <button class="btn big red" id="acc-save">Save</button>
+          <button class="btn" data-act="acc-cancel" id="acc-cancel">Cancel</button>
+        </div>
+        <div class="studio small">Riftline · Camel Studios</div>
+      </div>
+    </section>
+
     <!-- QUICK PLAY -->
     <section class="screen dim" id="s-queue">
       <div class="panel lobby">
         <h2>Quick Play</h2>
         <p class="muted">Finds other players automatically. No code needed.</p>
         <div class="seg big-seg" id="queue-seg"><button data-q="1v1" class="sel">1v1</button><button data-q="2v2">2v2</button></div>
+        <div class="qa-label">Your agent <span class="muted small">(you can change it until the match starts)</span></div>
+        <div class="agent-pick" id="queue-agents"></div>
         <button class="btn big red" id="queue-btn">Find Match</button>
         <div class="queue-status" id="queue-status"></div>
         <button class="btn" data-act="leave">Cancel</button>
