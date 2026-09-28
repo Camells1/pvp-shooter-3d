@@ -8,6 +8,7 @@ import { Hud } from './ui/hud.js';
 import { BuyMenu } from './ui/buy.js';
 import { PointerLock } from './ui/pointer.js';
 import { PeerConnection } from './net/PeerConnection.js';
+import { account } from './net/account.js';
 import { sfx, setVolume, unlock } from './audio.js';
 
 const $ = s => document.querySelector(s);
@@ -84,7 +85,55 @@ document.addEventListener('click', e => { if (e.target.closest?.('.btn, .char-ca
 
 // ---------------------------------------------------------------- main menu
 // ---------------------------------------------------------------- Riftline ID (username#tag)
-function renderId() { $('#id-name').textContent = settings.name; $('#id-tag').textContent = '#' + settings.tag; }
+function renderId() {
+  $('#id-name').textContent = settings.name; $('#id-tag').textContent = '#' + settings.tag;
+  const b = $('#login-btn');
+  b.textContent = account.signedIn ? '✓ Signed in' : 'Log in';
+  b.classList.toggle('in', account.signedIn);
+  b.title = account.signedIn ? `Signed in as ${account.user.email}. Click to manage.` : 'Log in or create an account with your email';
+  renderOnline();
+}
+// Account box on the Riftline ID screen
+function renderOnline() {
+  const el = $('#acc-online');
+  if (!el) return;
+  el.innerHTML = account.signedIn
+    ? `<span>Signed in as <b>${esc(account.user.email)}</b></span><button class="btn" id="acc-logout">Log out</button>`
+    : `<button class="btn cyan" id="acc-login">Log in / Create account</button><span class="muted small">Keep your ID on an account and use it on any PC.</span>`;
+}
+// Take the Riftline ID from the account (or give the account this PC's ID if it has none yet)
+function adoptAccount(u) {
+  if (!u) return;
+  if (u.name && u.tag) { settings.name = u.name; settings.tag = u.tag; settings.account = true; save(); }
+  else if (settings.account) account.setId(settings.name, settings.tag).catch(() => {});
+  renderId();
+}
+async function doLogin() {
+  const api = window.electronAPI;
+  if (!api?.openLogin) { window.open('https://camells1.github.io/account/', '_blank'); return; }
+  const data = await api.openLogin();
+  if (!data?.refreshToken) return;
+  try {
+    const u = await account.signIn(data);
+    adoptAccount(u);
+    toast(`Signed in as ${u.name ? u.name + '#' + u.tag : u.email}`, 3000, true);
+    if (app.screen === 'account') show(settings.account ? (app.accountReturn || 'main') : 'account');
+    if (!settings.account) openAccount(true);
+  } catch (e) { toast('Sign-in failed: ' + e.message); }
+}
+async function doLogout() {
+  account.logout();
+  await window.electronAPI?.logout?.();
+  renderId();
+  toast('Logged out', 2000, true);
+}
+document.addEventListener('click', e => {
+  if (e.target.closest('#login-btn')) { if (account.signedIn) openAccount(false); else doLogin(); }
+  if (e.target.closest('#acc-login')) doLogin();
+  if (e.target.closest('#acc-logout')) doLogout();
+});
+// Stay logged in: refresh the saved session in the background on launch
+account.restore().then(adoptAccount).catch(() => renderId());
 function accPreview() {
   const n = cleanName($('#acc-name').value), t = cleanTag($('#acc-tag').value);
   $('#acc-preview').innerHTML = n ? `You'll appear as <b>${esc(n)}</b><span class="ptag">#${esc(t || '????')}</span>` : '';
@@ -109,6 +158,7 @@ $('#acc-save').addEventListener('click', () => {
   if (t.length < 3) { $('#acc-err').textContent = 'Tag needs 3 to 5 letters or numbers.'; return; }
   settings.name = n; settings.tag = t; settings.account = true; save();
   renderId();
+  if (account.signedIn) account.setId(n, t).catch(() => toast('Saved on this PC. Could not update your online account right now.'));
   toast(`Welcome, ${n}#${t}`, 2500, true);
   show(app.accountReturn || 'main');
 });

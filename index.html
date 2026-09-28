@@ -40,7 +40,10 @@
         <div class="studio">A CAMEL STUDIOS GAME</div>
       </div>
       <div class="main-bottom">
-        <button class="id-chip" data-act="account" title="Your Riftline ID. Click to edit."><span class="id-name" id="id-name">Player</span><span class="id-tag" id="id-tag">#0000</span><span class="id-edit">✎</span></button>
+        <div class="id-line">
+          <button class="id-chip" data-act="account" title="Your Riftline ID. Click to edit."><span class="id-name" id="id-name">Player</span><span class="id-tag" id="id-tag">#0000</span><span class="id-edit">✎</span></button>
+          <button class="btn login-btn electron-only" id="login-btn">Log in</button>
+        </div>
         <div class="main-row">
           <button class="btn big red" data-act="quick">Quick Play</button>
           <button class="btn big green" data-act="bot">Play vs Bots</button>
@@ -70,6 +73,7 @@
           <label>TAG<input id="acc-tag" maxlength="5" spellcheck="false" autocomplete="off" placeholder="3-5" /></label>
           <button class="btn" id="acc-roll" title="Random tag">⟳</button>
         </div>
+        <div class="acc-online electron-only" id="acc-online"></div>
         <div class="acc-preview" id="acc-preview"></div>
         <div class="acc-err" id="acc-err"></div>
         <div class="acc-btns">

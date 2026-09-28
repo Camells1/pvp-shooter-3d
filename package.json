@@ -1,6 +1,6 @@
 {
   "name": "riftline",
-  "version": "2.5.0",
+  "version": "2.5.1",
   "author": "Camel Studios",
   "description": "Riftline: a tactical 3D 1v1/2v2 shooter. Peer-to-peer, no server.",
   "main": "electron/main.js",

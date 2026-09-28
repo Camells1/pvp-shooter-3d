@@ -2,7 +2,7 @@
 
 **Riftline** is a tactical 3D shooter for **1v1 and 2v2** online with friends, played in first person. It's round-based, with abilities, an economy, and a Valorant-style spike mode. It's also peer-to-peer, so there's **no server to run**, and it updates itself.
 
-*A Camel Studios game.*
+*A Camel Studios game.* Website: **https://camells1.github.io/riftline/** · Account: **https://camells1.github.io/account/**
 
 ## ▶ Download & play
 
