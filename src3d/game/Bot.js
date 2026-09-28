@@ -67,7 +67,7 @@ export class Bot {
     this.errT -= dt;
     if (this.errT <= 0) { this.errT = 0.3 + Math.random() * 0.5; this.errX = (Math.random() - 0.5) * 2 * d.aimErr; this.errY = (Math.random() - 0.5) * 2 * d.aimErr * 0.6; }
 
-    let moveX = 0, moveZ = 0, lookYaw = this.yaw, lookPitch = 0;
+    let moveX = 0, moveZ = 0, lookYaw = this.yaw, lookPitch = 0, fighting = false;
     const lowHp = p.hp < p.char.health * 0.45;
     const wid = p.weaponId;
     const abs = p.char.abilities;
@@ -94,6 +94,7 @@ export class Bot {
       input.use = true;
       lookYaw = this.yaw; lookPitch = -0.4;
     } else if (t && this.visible) {
+      fighting = true;
       const dx = t.pos.x - p.pos.x, dz = t.pos.z - p.pos.z, dy = (t.pos.y + 1.2) - (p.pos.y + 1.55);
       const dist = Math.hypot(dx, dz);
       lookYaw = Math.atan2(-dx, -dz) + this.errX;
@@ -159,6 +160,12 @@ export class Bot {
           if (abs[2].id === 'overwatch' && p.canUse('X') && Math.random() < 0.3) input.ab = 'X';
         }
       }
+    }
+
+    // Never strafe off a ledge into a drop (path following already avoids holes)
+    if (fighting && (moveX || moveZ) && p.grounded) {
+      const ml = Math.hypot(moveX, moveZ) || 1, ax = p.pos.x + moveX / ml * 0.8, az = p.pos.z + moveZ / ml * 0.8;
+      if (this.world.groundBelow(ax, az, 0.1, p.pos.y + 0.7, 2.6) === -Infinity) { moveX = 0; moveZ = 0; this.strafe *= -1; input.jump = false; }
     }
 
     this.lastCheck += dt;

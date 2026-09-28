@@ -5,7 +5,7 @@ const path = require('path');
 
 const src = path.join(__dirname, '..', 'node_modules', 'three', 'examples', 'jsm');
 const dst = path.join(__dirname, '..', 'vendor', 'three-addons');
-const dirs = ['postprocessing', 'shaders', 'geometries', 'environments'];
+const dirs = ['postprocessing', 'shaders', 'geometries', 'environments', 'utils'];
 
 fs.rmSync(dst, { recursive: true, force: true });
 for (const d of dirs) fs.cpSync(path.join(src, d), path.join(dst, d), { recursive: true });

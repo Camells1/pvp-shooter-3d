@@ -63,7 +63,15 @@ Skins: Carbon · Arctic Camo · Tiger · Toxic · Oceanic · Neon Pulse · Solid
 
 ## Maps
 
-**Bastion** (attack/defend, with A long, Mid and B long) · **Foundry** · **Skyline** · **Canyon** · **Harbor** · **Citadel** · plus the **Range**
+Every map is a full-size spike map (about 120m x 88m): attackers start west, defenders east, with an A site and a B site that each have their own look.
+
+- **Bastion**: a sunny hill town. A long street to A with a raised heaven, a pillared courtyard mid, and a covered market into B.
+- **Foundry**: a steel plant. A is a roofed smelter hall with a vent flank, mid is the furnace room, B is an open container yard with a catwalk.
+- **Skyline**: neon rooftops at night. Bridges over the drop, a raised helipad A, an interior corridor under the mid skybridge, a rooftop garden B.
+- **Canyon**: a desert temple on a mesa (A), a chasm mid with two rope bridges, and a cave tunnel into the mining camp (B).
+- **Harbor**: docks. A is on the deck of a cargo ship, mid is a container maze, B is a roofed warehouse with racks.
+- **Citadel**: a temple at dusk. A cloister leads to the throne hall (A), a grand stair climbs to the mid plaza, B is a fountain garden.
+- **Range**: practice targets at 10, 20, 30 and 50m.
 
 ## Controls
 
@@ -78,6 +86,7 @@ Skins: Carbon · Arctic Camo · Tiger · Toxic · Oceanic · Neon Pulse · Solid
 | Pick up gun, or hold to plant/defuse | F |
 | Drop gun | G |
 | Scoreboard | Tab |
+| Inspect weapon | Y |
 | First / third person | V |
 | Pause / Fullscreen | Esc / F11 |
 

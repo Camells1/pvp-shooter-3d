@@ -4,11 +4,14 @@
 import { VERSION } from '../game/data.js';
 
 // The protocol tag is part of every room id, so different game versions never find each other by accident.
-const PROTO = 'p3';
+const PROTO = 'p4';
 const PREFIX = `riftline-${PROTO}-`;
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const TIMEOUT = 10000;
 const QUEUE_SLOTS = 6;
+// Only the host may originate these (round flow, economy, lobby). Guests' copies are dropped.
+const HOST_ONLY = new Set(['rs', 'rstart', 'sp', 'over', 'drop', 'taken', 'bought', 'left', 'revive', 'lobby', 'start']);
+const BROKER_ERRORS = new Set(['network', 'server-error', 'socket-error', 'socket-closed', 'disconnected']);
 
 // STUN finds your public address; TURN relays traffic when a direct connection is impossible
 // (strict routers, some school/work networks, mobile hotspots).
@@ -60,7 +63,12 @@ export class PeerConnection {
     this.myId = 'h';
     this._startHeartbeat();
     this.peer.on('disconnected', () => { try { this.peer.reconnect(); } catch (_) {} });
-    this.peer.on('error', () => {});
+    // Lost the matchmaking server: existing players stay connected, but new ones can't find us
+    this.peer.on('error', e => {
+      if (!BROKER_ERRORS.has(e.type)) return;
+      this.onBrokerIssue?.(e);
+      try { this.peer.reconnect(); } catch (_) {}
+    });
     this.peer.on('connection', conn => {
       conn.on('data', d => {
         if (d.type !== 'hello0') return;
@@ -156,6 +164,7 @@ export class PeerConnection {
         clearInterval(this._mergeTimer);
         const oldPeer = this.peer;
         clearInterval(this._timer);
+        clearInterval(probe._timer); // the probe's heartbeat must not keep running on its own
         Object.assign(this, { peer: probe.peer, isHost: false, myId: probe.myId, links: probe.links });
         for (const [id, link] of this.links) this._rebind(link, id);
         this._startHeartbeat();
@@ -166,9 +175,13 @@ export class PeerConnection {
     this.merging = false;
   }
 
+  // Move a link adopted from the merge probe over to this connection (data AND close handling)
   _rebind(link, id) {
-    link.conn.removeAllListeners?.('data');
+    for (const ev of ['data', 'close', 'error']) link.conn.removeAllListeners?.(ev);
     link.conn.on('data', d => this._onData(link, id, d));
+    const lost = () => this._lost(id, link);
+    link.conn.on('close', lost);
+    link.conn.on('error', lost);
   }
 
   // ---------------------------------------------------------------- links
@@ -209,6 +222,7 @@ export class PeerConnection {
   }
 
   _recv(d, fromLink) {
+    if (HOST_ONLY.has(d.type) && (this.isHost || d.from !== 'h')) return; // forged authority message
     if (this.isHost) {
       d.from = fromLink; // never trust a guest's claimed sender id
       if (d.to && d.to !== 'h') { this._raw(d.to, d); return; }

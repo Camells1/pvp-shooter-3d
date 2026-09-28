@@ -77,6 +77,10 @@ export class World {
         }
         for (const y of tops) {
           if (!this.fits(x, y, z, r, h)) continue;
+          // Keep nodes away from drop-offs (bridge edges, chasm lips) so bots don't walk off
+          let edge = false;
+          for (const [ox, oz] of [[0.7, 0], [-0.7, 0], [0, 0.7], [0, -0.7]]) if (this.groundBelow(x + ox, z + oz, 0.01, y + 0.35, 1.3) === -Infinity) { edge = true; break; }
+          if (edge) continue;
           const n = { id: nodes.length, x, y, z, i, j, edges: [] };
           nodes.push(n);
           const k = i + ',' + j;
@@ -97,6 +101,8 @@ export class World {
           let ok;
           if (dy < -0.6) ok = this.clear(n.x, n.y + 0.8, n.z, m.x, n.y + 0.8, m.z) && this.clear(n.x, n.y + 1.6, n.z, m.x, n.y + 1.6, m.z);
           else ok = this.clear(n.x, n.y + 0.65, n.z, m.x, m.y + 0.65, m.z) && this.clear(n.x, lo + 1.6, n.z, m.x, lo + 1.6, m.z);
+          // Don't cut corners over holes: the midpoint must have floor under it
+          if (ok) ok = this.groundBelow((n.x + m.x) / 2, (n.z + m.z) / 2, 0.05, Math.max(n.y, m.y) + 0.1, 2.6) > -Infinity;
           if (ok) n.edges.push({ to: m.id, jump: dy > 0.6, cost: Math.hypot(m.x - n.x, dy, m.z - n.z) });
         }
       }

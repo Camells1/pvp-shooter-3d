@@ -53,13 +53,21 @@ export class Effects {
     // Muzzle flashes
     const ft = flashTexture();
     this.flashes = [];
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 3; i++) {
       const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: ft, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, fog: false }));
       s.visible = false; scene.add(s);
       const l = new THREE.PointLight(0xffb060, 0, 9, 2); scene.add(l);
       this.flashes.push({ sprite: s, light: l, life: 0 });
     }
     this.fi = 0;
+
+    // Pool of dynamic lights for explosions and ability zones (fixed count => no shader recompiles)
+    this.dyn = [];
+    for (let i = 0; i < 4; i++) {
+      const l = new THREE.PointLight(0xffffff, 0, 12, 1.6);
+      scene.add(l);
+      this.dyn.push({ light: l, t: 0, dur: 0, base: 0, hold: false });
+    }
 
     // Particles (sparks, blood-energy, blink)
     this.N = 900;
@@ -171,8 +179,8 @@ export class Effects {
     const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
     const ball = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16), mat);
     ball.position.copy(pos); this.scene.add(ball);
-    const light = new THREE.PointLight(color, 120, radius * 5, 2); light.position.copy(pos); this.scene.add(light);
-    this.booms.push({ ball, light, t: 0, radius });
+    this.flash(pos, color, 120, radius * 5, 0.45);
+    this.booms.push({ ball, t: 0, radius });
     this.burst(pos, color, 70, radius * 2.2, 0.8, 6);
     this.burst(pos, 0x444444, 30, radius * 0.8, 1.4, -1.5);
     this.ring(new THREE.Vector3(pos.x, pos.y - 0.4, pos.z), color, radius * 1.2);
@@ -194,15 +202,30 @@ export class Effects {
     }
   }
 
+  // Borrow a pooled light. dur > 0 fades it out; hold = true keeps it until release().
+  flash(pos, color, intensity, distance, dur) { return this._take(pos, color, intensity, distance, dur, false); }
+  holdLight(pos, color, intensity, distance) { return this._take(pos, color, intensity, distance, 0, true); }
+  release(h) { if (h) { h.hold = false; h.dur = 0; h.light.intensity = 0; } }
+  _take(pos, color, intensity, distance, dur, hold) {
+    let h = this.dyn.find(d => !d.hold && d.light.intensity === 0) || this.dyn.find(d => !d.hold) || this.dyn[0];
+    h.light.position.copy(pos); h.light.color.set(color); h.light.distance = distance;
+    h.light.intensity = h.base = intensity; h.t = 0; h.dur = dur; h.hold = hold;
+    return h;
+  }
+
   update(dt) {
+    for (const d of this.dyn) {
+      if (d.hold || d.dur <= 0 || d.light.intensity === 0) continue;
+      d.t += dt;
+      d.light.intensity = d.t >= d.dur ? 0 : d.base * (1 - d.t / d.dur);
+    }
     if (this.booms) for (let i = this.booms.length - 1; i >= 0; i--) {
       const b = this.booms[i];
       b.t += dt;
       const k = b.t / 0.45;
       b.ball.scale.setScalar(0.5 + k * b.radius);
       b.ball.material.opacity = Math.max(0, 0.85 * (1 - k));
-      b.light.intensity = Math.max(0, 120 * (1 - k));
-      if (k >= 1) { this.scene.remove(b.ball); this.scene.remove(b.light); b.ball.geometry.dispose(); this.booms.splice(i, 1); }
+      if (k >= 1) { this.scene.remove(b.ball); b.ball.geometry.dispose(); this.booms.splice(i, 1); }
     }
     for (const t of this.tracers) {
       if (!t.mesh.visible) continue;

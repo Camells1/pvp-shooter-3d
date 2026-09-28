@@ -10,7 +10,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { weaponById, charById, SHIELDS, ECON, ROUND, SPIKE, PICKUP_HEAL, ABILITY_NAMES } from './data.js';
+import { weaponById, charById, CHARACTERS, SHIELDS, ECON, ROUND, SPIKE, PICKUP_HEAL, ABILITY_NAMES } from './data.js';
 import { buildMap } from './maps.js';
 import { Player } from './Player.js';
 import { Bot, Dummy, botShopping } from './Bot.js';
@@ -28,6 +28,8 @@ const r3 = v => Math.round(v * 1000) / 1000;
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const hexs = c => '#' + c.toString(16).padStart(6, '0');
 const V = p => new THREE.Vector3(p.x ?? p[0], p.y ?? p[1], p.z ?? p[2]);
+// Body animation for each ability
+const ABILITY_ANIM = { dash: 'dash', blink: 'blink', shield: 'brace', fortify: 'cast', cloak: 'cast', overclock: 'cast', firebomb: 'throw', smoke: 'throw', storm: 'throw', mine: 'slam', field: 'slam', rocket: 'rocket', quake: 'slam', nova: 'slam', freeze: 'cast', heal: 'cast', revive: 'cast', pulse: 'cast', overwatch: 'cast', chain: 'cast', wall: 'cast' };
 const killName = w => w?.startsWith?.('ab:') ? (ABILITY_NAMES[w.slice(3)] || 'Ability') : w === 'spike' ? 'Spike' : w ? weaponById(w).name : '';
 
 // A player simulated on another machine: interpolates network snapshots.
@@ -54,7 +56,7 @@ class RemotePlayer {
     this.snaps.push({ t: m.t, p: m.p, v: m.v, yaw: m.y, pitch: m.pi, dead });
     if (this.snaps.length > 30) this.snaps.shift();
     this.hp = m.hp; this.shield = m.sh || 0; this.weaponId = m.w; this.skinId = m.sk || 'default';
-    this.grounded = !!(m.f & 1); this.shieldOn = !!(m.f & 4); this.ads = !!(m.f & 16); this.cloaked = !!(m.f & 32);
+    this.grounded = !!(m.f & 1); this.shieldOn = !!(m.f & 4); this.ads = !!(m.f & 16); this.cloaked = !!(m.f & 32); this.channeling = !!(m.f & 64);
     this.reload = m.rl;
     this.hasState = true;
   }
@@ -126,6 +128,8 @@ export class Game {
 
     this.ents = new Map();
     for (const r of this.roster) this._makeEnt(r);
+    // Practice range targets come straight from the map definition
+    if (this.isRange) this.map.dummies.forEach((d, i) => this._makeEnt({ id: 'd' + i, name: 'Target', char: CHARACTERS[i % CHARACTERS.length].id, team: 1, isBot: true, skins: {}, dummy: d }));
     this.me = this.ents.get(this.myId);
     this.myTeam = this.me.team;
     this.vm.setChar(this.me.char);
@@ -165,7 +169,28 @@ export class Game {
       for (const E of this.ents.values()) if (E.local) { E.sim.frozen = false; E.sim.holdFire = false; E.sim.ult = 99; }
       this.hud.banner('PRACTICE RANGE', 'B: any gun for free · Q/E/X abilities', '#ffd166', 3);
     }
+    this._warmShaders();
     if (this.net && !this.isHost) this.net.sendTo('h', { type: 'loaded' });
+  }
+
+  // Compile every material an ability/effect can create now (during loading) instead of mid-fight.
+  _warmShaders() {
+    const warm = new THREE.Group();
+    warm.position.set(0, -400, 0);
+    const add = mat => { const m = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), mat); m.frustumCulled = false; warm.add(m); };
+    add(new THREE.MeshStandardMaterial({ color: 0x4a3a66, roughness: 1, transparent: true, opacity: 0.5, depthWrite: false }));
+    add(new THREE.MeshStandardMaterial({ color: 0xbfefff, emissive: 0x3aa8e0, emissiveIntensity: 0.4, roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.82 }));
+    add(new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false }));
+    add(new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    add(new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, side: THREE.DoubleSide }));
+    add(new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+    add(new THREE.MeshStandardMaterial({ color: 0x22252b, metalness: 0.8, roughness: 0.3 }));
+    add(new THREE.MeshStandardMaterial({ color: 0x111111, emissive: 0xff3b5c, emissiveIntensity: 3 }));
+    for (const id of ['smg', 'ar', 'sniper']) warm.add(buildGun(id, 0xffd166));
+    warm.traverse(o => { o.frustumCulled = false; });
+    this.scene.add(warm);
+    try { this.renderer.compile(this.scene, this.camera); this.renderer.compile(this.vm.scene, this.vm.camera); } catch (_) {}
+    this.scene.remove(warm);
   }
 
   // ------------------------------------------------------------ entities
@@ -197,7 +222,11 @@ export class Game {
     this.ents.set(E.id, E);
   }
 
-  _alive() { return [...this.ents.values()].filter(E => E.alive && E.connected); }
+  // Alive players, cached until someone dies/revives/leaves or a round starts (hot path: every pellet, bot, HUD frame)
+  _alive() {
+    if (!this.aliveCache) this.aliveCache = [...this.ents.values()].filter(E => E.alive && E.connected);
+    return this.aliveCache;
+  }
   _team(t) { return [...this.ents.values()].filter(E => E.team === t); }
   get attackTeam() { return this.side[0] === 0 ? 0 : 1; }
   _isAttacker(E) { return this.side[E.team] === 0; }
@@ -276,6 +305,7 @@ export class Game {
         if (e.code === 'Digit1') this._selectSlot('primary');
         if (e.code === 'Digit2') this._selectSlot('sidearm');
         if (e.code === 'KeyB') this._toggleBuy();
+        if (e.code === 'KeyY' && this.me.alive && !this.buyOpen) this._bcast({ type: 'anim', id: this.me.id, ab: 'inspect' });
         if (e.code === 'KeyV') { this.settings.camera = this.settings.camera === 'third' ? 'first' : 'third'; this.onSettingsChange?.(); }
         if (['Space', 'Tab'].includes(e.code)) e.preventDefault();
       },
@@ -342,6 +372,13 @@ export class Game {
       mine: m => this._onMine(m),
       mineGone: m => { const mi = this.mines.get(m.mid); if (mi) { this.scene.remove(mi.mesh); this.mines.delete(m.mid); } },
       revive: m => this._onRevive(m),
+      anim: m => {
+        const E = this.ents.get(m.id);
+        if (!E) return;
+        const kind = m.ab === 'inspect' ? 'inspect' : ABILITY_ANIM[m.ab];
+        E.model.play(kind);
+        if (E === this.me) { this.vm.play(kind); if (kind === 'dash' || kind === 'blink') this.fovKick = 1; }
+      },
       sp: m => this._onSpike(m),
       pk: m => { const p = this.pickups[m.i]; if (p) p.active = false; },
       drop: m => this._onDrop(m),
@@ -549,9 +586,11 @@ export class Game {
     for (const p of this.pickups) p.active = true;
     this.revealT = 0; this.deathOrder = []; this.chan.clear();
     this.spike = { state: m.holder ? 'carried' : 'none', holder: m.holder, pos: null, site: null, t: 0 };
+    this.aliveCache = null;
     for (const E of this.ents.values()) {
       if (!E.connected) { E.alive = false; continue; }
       E.alive = true;
+      this.aliveCache = null;
       const s = m.spawns[E.id];
       const yaw = this._faceYaw(s);
       if (E.local) {
@@ -625,7 +664,7 @@ export class Game {
     const E = this.ents.get(id);
     if (!E) return;
     E.connected = false;
-    E.alive = false;
+    E.alive = false; this.aliveCache = null;
     E.model.root.visible = false;
     this.hud.feed(`<b style="color:${TEAM_COLORS[E.team === this.myTeam ? 0 : 1]}">${esc(E.name)}</b> <span class="fk">left the match</span>`);
     if (this.isHost) {
@@ -729,7 +768,7 @@ export class Game {
   _onDie(m) {
     const E = this.ents.get(m.id);
     if (!E || !E.alive) return;
-    E.alive = false;
+    E.alive = false; this.aliveCache = null;
     E.deaths++;
     this.deathOrder.push(E.id);
     if (E.sim) E.sim.dead = true;
@@ -769,12 +808,10 @@ export class Game {
   _onRevive(m) {
     const E = this.ents.get(m.target);
     if (!E || !E.connected) return;
-    E.alive = true;
+    E.alive = true; this.aliveCache = null;
     this.deathOrder = this.deathOrder.filter(i => i !== E.id);
     if (E.local) {
-      const inv = E.sim.inv, shield = E.sim.shield;
-      E.sim.reset(m.pos, true);
-      if (m.keep) { E.sim.inv = inv; E.sim.shield = shield; }
+      E.sim.reset(m.pos, !!m.keep);
       E.sim.dead = false;
       E.sim.frozen = false; E.sim.holdFire = false;
       if (E.dummy) E.sim.yaw = this._faceYaw(m.pos);
@@ -798,6 +835,7 @@ export class Game {
     E.model.hit();
     if (E === this.me) {
       sfx.hurt();
+      this.vm.flinch();
       this.shake = Math.min(1, this.shake + 0.4);
       const ang = Math.atan2(-(from[0] - s.pos.x), -(from[2] - s.pos.z)) - this.yaw;
       this.dmgAngle = -ang;
@@ -981,6 +1019,7 @@ export class Game {
 
   _resolveAbility(E, ev) {
     const s = E.sim, id = ev.id, by = E.id, team = E.team;
+    this._bcast({ type: 'anim', id: by, ab: id });
     const pos = [r3(s.pos.x), r3(s.pos.y), r3(s.pos.z)];
     switch (id) {
       case 'dash': case 'shield': case 'overclock': case 'fortify': case 'cloak':
@@ -1094,7 +1133,6 @@ export class Game {
       disc.rotation.x = -Math.PI / 2; disc.position.y = 0.06; g.add(disc);
       const ring = new THREE.Mesh(new THREE.RingGeometry(m.r - 0.12, m.r, 48), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, side: THREE.DoubleSide }));
       ring.rotation.x = -Math.PI / 2; ring.position.y = 0.07; g.add(ring);
-      const light = new THREE.PointLight(color, 25, m.r * 3, 1.5); light.position.y = 1.2; g.add(light);
       if (m.kind === 'storm') {
         const cyl = new THREE.Mesh(new THREE.CylinderGeometry(m.r, m.r, 8, 32, 1, true), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.12, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }));
         cyl.position.y = 4; g.add(cyl);
@@ -1103,10 +1141,11 @@ export class Game {
       sfx.ability(m.kind === 'fire' ? 'fire' : m.kind === 'storm' ? 'zap' : 'heal');
     }
     this.scene.add(g);
-    this.zones.push({ ...m, c, t: m.dur, group: g, tick: 0 });
+    const light = m.kind === 'smoke' ? null : this.fx.holdLight(c.clone().setY(c.y + 1.2), g.userData.color, 25, m.r * 3);
+    this.zones.push({ ...m, c, t: m.dur, group: g, tick: 0, light });
   }
 
-  _removeZone(z) { this.scene.remove(z.group); z.group.traverse(o => o.geometry?.dispose?.()); }
+  _removeZone(z) { this.fx.release(z.light); this.scene.remove(z.group); z.group.traverse(o => o.geometry?.dispose?.()); }
 
   _updateZones(dt) {
     for (let i = this.zones.length - 1; i >= 0; i--) {
@@ -1188,7 +1227,7 @@ export class Game {
     const pos = geo.attributes.position;
     for (let i = 0; i < pos.count; i++) pos.setY(i, pos.getY(i) + (Math.random() - 0.5) * 0.15);
     geo.computeVertexNormals();
-    const mat = new THREE.MeshPhysicalMaterial({ color: 0xbfefff, emissive: 0x3aa8e0, emissiveIntensity: 0.35, roughness: 0.08, transmission: 0.35, transparent: true, opacity: 0.88, thickness: 0.5 });
+    const mat = new THREE.MeshStandardMaterial({ color: 0xbfefff, emissive: 0x3aa8e0, emissiveIntensity: 0.4, roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.82 });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set((box.min.x + box.max.x) / 2, m.y + h / 2, (box.min.z + box.max.z) / 2);
     mesh.castShadow = true;
@@ -1406,7 +1445,7 @@ export class Game {
         for (const E of this.ents.values()) {
           if (!E.local) continue;
           const s = E.sim;
-          const f = (s.grounded ? 1 : 0) | (s.dead ? 2 : 0) | (s.shieldT > 0 ? 4 : 0) | ((E === me ? ads : false) ? 16 : 0) | (s.cloaked ? 32 : 0);
+          const f = (s.grounded ? 1 : 0) | (s.dead ? 2 : 0) | (s.shieldT > 0 ? 4 : 0) | ((E === me ? ads : false) ? 16 : 0) | (s.cloaked ? 32 : 0) | (s.channeling ? 64 : 0);
           list.push({ id: E.id, t: performance.now(), p: [r3(s.pos.x), r3(s.pos.y), r3(s.pos.z)], v: [r3(s.vel.x), r3(s.vel.y), r3(s.vel.z)], y: r3(s.yaw), pi: r3(s.pitch), w: s.weaponId, sk: s.skinId, f, rl: r3(s.reloadProgress), hp: Math.ceil(s.hp), sh: Math.ceil(s.shield) });
         }
         this.net.send({ type: 'S', list });
@@ -1419,7 +1458,7 @@ export class Game {
       const st = E.st, m = E.model;
       m.root.position.set(st.pos.x, st.pos.y, st.pos.z);
       m.setWeapon(st.weaponId, E.local ? E.sim.skinId : E.remote.skinId);
-      m.update(dt, { vx: st.vel.x, vz: st.vel.z, yaw: st.yaw, pitch: st.pitch, grounded: st.grounded, dead: !E.alive || st.dead, reload: st.reloadProgress, shield: E.local ? st.shieldT > 0 : st.shieldOn });
+      m.update(dt, { vx: st.vel.x, vz: st.vel.z, yaw: st.yaw, pitch: st.pitch, grounded: st.grounded, dead: !E.alive || st.dead, reload: st.reloadProgress, shield: E.local ? st.shieldT > 0 : st.shieldOn, kneel: E.local ? E.sim.channeling : E.remote.channeling });
       const cloaked = E.local ? E.sim.cloaked : E.remote.cloaked;
       const hideCloak = cloaked && E.team !== this.myTeam;
       m.root.visible = E.connected && (E.local || E.remote.hasState || rs.phase !== 'wait') && !hideCloak;
@@ -1469,8 +1508,9 @@ export class Game {
     this.vmPass.enabled = fp;
     if (fp) {
       this.vm.setWeapon(ms.weaponId, ms.skinId);
-      this.vm.visible = !ms.channeling;
-      this.vm.update(dt, { speed: Math.hypot(ms.vel.x, ms.vel.z), grounded: ms.grounded, ads: ads, reload: ms.reloadProgress, walk: input.walk }, this.camera);
+      this.vm.visible = true;
+      if (input.fire || ads) this.vm.cancelInspect();
+      this.vm.update(dt, { speed: Math.hypot(ms.vel.x, ms.vel.z), grounded: ms.grounded, ads: ads, reload: ms.reloadProgress, walk: input.walk, channel: ms.channeling }, this.camera);
     }
     this.fx.update(dt);
     this._hud(dt, myChannel);
@@ -1504,8 +1544,9 @@ export class Game {
     const eyeY = st.pos.y + st.h * 0.9;
 
     if (!spectating && this._firstPerson()) {
-      // First person: camera at the eyes
-      cam.position.set(st.pos.x, eyeY, st.pos.z);
+      // First person: camera at the eyes (lower while kneeling to plant/defuse)
+      this.kneelCam = (this.kneelCam || 0) + ((this.me.sim.channeling ? 1 : 0) - (this.kneelCam || 0)) * Math.min(1, dt * 8);
+      cam.position.set(st.pos.x, eyeY - this.kneelCam * 0.5, st.pos.z);
       this.shake = Math.max(0, this.shake - dt * 4);
       if (this.shake > 0) cam.position.add(_v3.set((Math.random() - 0.5) * this.shake * 0.06, (Math.random() - 0.5) * this.shake * 0.06, 0));
       cam.lookAt(cam.position.x + dir.x * 50, cam.position.y + dir.y * 50, cam.position.z + dir.z * 50);
@@ -1540,7 +1581,8 @@ export class Game {
       T.model.root.visible = T.model.root.visible && !(scoped && a > 0.6) && this.camBack > 0.7;
     }
     const zoom = 1 + (w.zoom - 1) * a;
-    const fov = this.settings.fov / zoom;
+    this.fovKick = Math.max(0, (this.fovKick || 0) - dt * 4);
+    const fov = this.settings.fov / zoom + this.fovKick * 10;
     if (Math.abs(cam.fov - fov) > 0.01 || Math.abs(cam.aspect - innerWidth / innerHeight) > 0.001) {
       cam.fov = fov; cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix();
     }
@@ -1630,7 +1672,7 @@ export class Game {
       weaponName: w.name, ammo: ms.cur.ammo, mag: w.mag, reload: ms.reloadProgress,
       slotP: ms.inv.primary ? weaponById(ms.inv.primary.id).name : null, slotS: ms.inv.sidearm ? weaponById(ms.inv.sidearm.id).name : null, slot: ms.slot,
       abilities,
-      spreadPx, showCross: me.alive && !(w.scope && this.adsT > 0.6) && !this.buyOpen && !channel,
+      spreadPx, showCross: me.alive && !(w.scope && this.adsT > 0.6) && !this.buyOpen && !channel && !(this._firstPerson() && this.adsT > 0.6 && ['holo', 'scope'].includes(this.vm.gun?.userData.sightType)),
       scope: !!w.scope && this.adsT > 0.6 && me.alive,
       dead: !me.alive, dmgAngle: this.dmgAngle, reveal: this.revealT > 0, slowed: ms.slowT > 0,
       centerText, prompt, channel,

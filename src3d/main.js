@@ -287,6 +287,7 @@ function startHosting() {
 }
 
 function bindHostNet(pc) {
+  pc.onBrokerIssue = () => toast('Lost contact with the matchmaking server. Players already here stay connected, but new players may not be able to join until it reconnects.', 6000);
   pc.onLeave = id => {
     const p = app.lobby?.players.find(x => x.id === id);
     if (p) toast(`${p.name} left`);
@@ -494,14 +495,6 @@ function hostStart() {
 function startRange() {
   closeNet();
   const roster = [{ id: 'h', name: settings.name, char: settings.char, team: 0, isBot: false, skins: mySkins() }];
-  const dummies = [
-    [-18, 0, -14, 'static'], [-18, 0, -4, 'static'], [-18, 0, 4, 'static'], [-18, 0, 14, 'static'],
-    [-8, 0, -10, 'strafe'], [-8, 0, 10, 'strafe'],
-    [2, 0, -15, 'strafe'], [2, 0, 0, 'static'], [2, 0, 15, 'strafe'],
-    [22, 0, -8, 'static'], [22, 0, 8, 'static'],
-    [-18, 0, 26, 'static'], [-12, 0, 28.5, 'strafe']
-  ];
-  dummies.forEach((d, i) => roster.push({ id: 'd' + i, name: 'Target', char: CHARACTERS[i % CHARACTERS.length].id, team: 1, isBot: true, skins: {}, dummy: { pos: [d[0], d[1], d[2]], kind: d[3] } }));
   startMatch({ roster, map: 99, rounds: 0, difficulty: 'normal', game: 'range' });
 }
 

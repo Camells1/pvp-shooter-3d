@@ -155,6 +155,14 @@ export class MenuStage {
       m.root.rotation.y = 0; // pedestal handles facing
     }
     this.dust.rotation.y += dt * 0.02;
+    // Idle gestures on the menu: a random fighter waves, inspects their gun, or casts
+    this.gestureT = (this.gestureT ?? 2) - dt;
+    if (this.gestureT <= 0 && this.mode !== 'gun') {
+      this.gestureT = 2.5 + Math.random() * 3;
+      const pool = this.mode === 'select' ? [this.sel.me] : ids;
+      const m = this.models[pool[Math.floor(Math.random() * pool.length)]];
+      m?.play(['wave', 'inspect', 'cast'][Math.floor(Math.random() * 3)]);
+    }
     this.rimA.intensity = 90 + Math.sin(this.t * 1.3) * 15;
     this.rimB.intensity = 70 + Math.cos(this.t * 1.1) * 12;
 
