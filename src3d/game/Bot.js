@@ -4,7 +4,7 @@ const DIFF = {
   normal: { reaction: 0.4,  aimErr: 0.05, aimSpeed: 7,   burst: 0.8, abil: 0.6 },
   hard:   { reaction: 0.2,  aimErr: 0.022, aimSpeed: 13, burst: 1, abil: 1 }
 };
-const RANGE = { classic: 14, mpistol: 9, cannon: 16, smg: 10, shotgun: 5, ar: 18, scout: 26, sniper: 30, lmg: 16 };
+const RANGE = { classic: 14, shorty: 4, mpistol: 9, cannon: 16, stinger: 9, smg: 10, shotgun: 5, carbine: 17, marksman: 26, ar: 18, scout: 26, sniper: 30, lmg: 16 };
 // Abilities a bot fires at an enemy it can see (the rest are used situationally below)
 const COMBAT = new Set(['firebomb', 'rocket', 'quake', 'chain', 'storm', 'nova', 'freeze', 'overclock', 'shield', 'smoke', 'pulse', 'overwatch', 'mine', 'wall']);
 
@@ -218,14 +218,18 @@ export function botShopping(credits, player) {
     let pick = null;
     if (c >= 4200 && r < 0.15) pick = 'sniper';
     else if (c >= 3200 && r < 0.25) pick = 'lmg';
-    else if (c >= 2900) pick = 'ar';
+    else if (c >= 2900) pick = r < 0.7 ? 'ar' : 'marksman';
+    else if (c >= 2500) pick = r < 0.5 ? 'marksman' : 'carbine';
+    else if (c >= 2100) pick = 'carbine';
     else if (c >= 1800) pick = r < 0.5 ? 'shotgun' : 'smg';
     else if (c >= 1500) pick = 'smg';
-    else if (c >= 1100 && r < 0.5) pick = 'scout';
-    if (pick) { buys.push(pick); c -= { sniper: 4200, lmg: 3200, ar: 2900, shotgun: 1800, smg: 1500, scout: 1100 }[pick]; }
+    else if (c >= 1100) pick = r < 0.5 ? 'scout' : 'stinger';
+    if (pick) { buys.push(pick); c -= { sniper: 4200, lmg: 3200, ar: 2900, marksman: 2500, carbine: 2100, shotgun: 1800, smg: 1500, scout: 1100, stinger: 1100 }[pick]; }
   }
   if (c >= 1000 && player.shield < 50) { buys.push('heavy'); c -= 1000; }
   else if (c >= 400 && player.shield < 25) { buys.push('light'); c -= 400; }
-  if (!player.inv.primary && !buys.length && player.inv.sidearm?.id === 'classic' && c >= 900) buys.push('cannon');
+  if (!player.inv.primary && !buys.length && player.inv.sidearm?.id === 'classic') {
+    if (c >= 900) buys.push('cannon'); else if (c >= 300 && Math.random() < 0.5) buys.push('shorty');
+  }
   return buys;
 }

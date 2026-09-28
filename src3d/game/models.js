@@ -92,7 +92,7 @@ function makeMaterials(char) {
 
 // ---------------------------------------------------------------- Guns
 // Returns group (+Z forward), with userData: muzzle, grip, fore (hand points), sight (eye-line point), sightType.
-export const SIDEARMS = new Set(['classic', 'mpistol', 'cannon']);
+export const SIDEARMS = new Set(['classic', 'shorty', 'mpistol', 'cannon']);
 
 let reticleTex = null;
 function getReticle() {
@@ -241,6 +241,108 @@ export function buildGun(id, accent = 0xff8800, skin = 'default') {
     muzzle = new THREE.Vector3(0, 0.045, 0.37);
     fore = new THREE.Vector3(0.02, -0.075, 0.0);
     sight = new THREE.Vector3(0, 0.096, -0.04);
+  } else if (id === 'shorty') {
+    // Sawed-off double barrel
+    add(rb(0.062, 0.054, 0.12, 0.014), m.body, 0, 0.03, 0.02);
+    for (const s of [1, -1]) {
+      add(cyl(0.016, 0.016, 0.21, 16), m.metal, 0.017 * s, 0.035, 0.18, Math.PI / 2);
+      add(tor(0.016, 0.0035), m.body, 0.017 * s, 0.035, 0.285);
+      add(cyl(0.011, 0.011, 0.004, 12), INSET, 0.017 * s, 0.035, 0.287, Math.PI / 2);
+    }
+    add(rb(0.02, 0.01, 0.2, 0.003), m.accent, 0, 0.056, 0.18); // top rib
+    add(rb(0.064, 0.024, 0.13, 0.008), m.polymer, 0, 0.004, 0.15); // forend
+    slots(0.033, 0.004, 0.11, 3, 0.03, 0.018, 0.008);
+    add(rb(0.046, 0.12, 0.056, 0.016), m.polymer, 0, -0.058, -0.04, 0.4);
+    gripTex(-0.04, -0.045, 0.4, 4, 0.048);
+    triggerGuard(-0.012, 0.02);
+    add(rb(0.012, 0.024, 0.02, 0.004), m.metal, 0, 0.066, -0.028, -0.5); // opening lever
+    add(sph(0.006, 8, 6), m.glow, 0, 0.066, 0.275); // front bead
+    pins(0.031, 0.03, [-0.01, 0.05]);
+    muzzle = new THREE.Vector3(0, 0.035, 0.29);
+    fore = new THREE.Vector3(0.02, -0.01, 0.15);
+    sight = new THREE.Vector3(0, 0.072, -0.02);
+  } else if (id === 'stinger') {
+    // Compact high-rate SMG: stubby receiver, long straight mag, vertical grip, wire stock
+    add(rb(0.058, 0.082, 0.26, 0.016), m.body, 0, 0.02, 0.07);
+    add(rb(0.06, 0.018, 0.15, 0.006), m.accent, 0, 0.066, 0.05);
+    seam(0.0295, 0.02, 0.07, 0.24);
+    pins(0.029, 0.0, [0.0, 0.14]);
+    port(0.035, 0.06, 0.05);
+    add(rb(0.062, 0.064, 0.12, 0.016), m.polymer, 0, 0.014, 0.25);
+    slots(0.0315, 0.014, 0.21, 3, 0.035, 0.022, 0.01);
+    barrel(0.012, 0.06, 0.02, 0.33);
+    add(cyl(0.02, 0.02, 0.06, 14), m.body, 0, 0.02, 0.37, Math.PI / 2); // compensator
+    for (let i = 0; i < 3; i++) add(rb(0.042, 0.004, 0.01, 0.001), INSET, 0, 0.039, 0.35 + i * 0.016);
+    add(rb(0.034, 0.21, 0.046, 0.008), m.polymer, 0, -0.115, 0.12, 0.16); // magazine
+    for (let i = 0; i < 4; i++) add(rb(0.036, 0.004, 0.048, 0.0015), INSET, 0, -0.05 - i * 0.045, 0.11 + i * 0.007, 0.16);
+    add(rb(0.03, 0.085, 0.032, 0.01), m.polymer, 0, -0.04, 0.26); // vertical grip
+    add(rb(0.042, 0.1, 0.05, 0.012), m.polymer, 0, -0.065, -0.02, 0.3);
+    gripTex(-0.045, -0.03, 0.3, 3, 0.043);
+    triggerGuard(-0.025, 0.03);
+    for (const s of [1, -1]) {
+      add(rb(0.006, 0.006, 0.18, 0.002), m.metal, 0.018 * s, 0.03, -0.15);
+      add(rb(0.006, 0.006, 0.19, 0.002), m.metal, 0.018 * s, -0.025, -0.15, -0.28);
+    }
+    add(rb(0.048, 0.075, 0.014, 0.005), m.polymer, 0, 0.0, -0.245);
+    chargingHandle(0.064, -0.02, 0.022);
+    add(rb(0.022, 0.012, 0.012, 0.003), m.metal, 0, 0.068, -0.04); // rear aperture
+    add(rb(0.004, 0.012, 0.006, 0.001), m.glow, 0, 0.068, 0.3);   // front post
+    muzzle = new THREE.Vector3(0, 0.02, 0.4);
+    fore = new THREE.Vector3(0, -0.075, 0.26);
+    sight = new THREE.Vector3(0, 0.074, -0.04);
+  } else if (id === 'carbine') {
+    // Bullpup: magazine behind the grip, one-piece shell, holo on a short rail
+    add(rb(0.07, 0.11, 0.5, 0.03), m.body, 0, 0.015, 0.02);
+    add(rb(0.072, 0.028, 0.3, 0.01), m.polymer, 0, -0.03, 0.14);
+    seam(0.0355, 0.032, 0.02, 0.48);
+    panel(0.0355, 0.0, -0.13, 0.05, 0.15);
+    add(rb(0.074, 0.012, 0.18, 0.005), m.accent, 0, 0.072, 0.13);
+    slots(0.0365, 0.02, 0.17, 3, 0.04, 0.026, 0.01);
+    port(0.03, -0.06, 0.06);
+    pins(0.035, 0.0, [-0.18, -0.02, 0.2]);
+    rail(0.18, 0.078, 0.02);
+    barrel(0.015, 0.12, 0.03, 0.33);
+    muzzleBrake(0.015, 0.03, 0.4);
+    add(rb(0.04, 0.13, 0.07, 0.012), m.polymer, 0, -0.1, -0.1, 0.12); // magazine (behind the grip)
+    for (let i = 0; i < 3; i++) add(rb(0.042, 0.005, 0.072, 0.002), INSET, 0, -0.07 - i * 0.035, -0.095 - i * 0.004, 0.12);
+    add(rb(0.042, 0.11, 0.05, 0.012), m.polymer, 0, -0.085, 0.08, 0.3); // pistol grip up front
+    gripTex(-0.065, 0.075, 0.3, 4, 0.043);
+    triggerGuard(-0.045, 0.12);
+    add(rb(0.05, 0.022, 0.13, 0.006), m.body, 0, 0.076, -0.15); // cheek rest
+    buttPad(0.012, -0.235, 0.11, 0.072, 0);
+    for (const s of [1, -1]) add(cyl(0.006, 0.006, 0.01, 8), m.metal, s * 0.037, 0.0, -0.2, 0, 0, Math.PI / 2);
+    sight = holo(0.09, 0.02); sightType = 'holo';
+    grip = new THREE.Vector3(0, -0.07, 0.08);
+    muzzle = new THREE.Vector3(0, 0.03, 0.44);
+    fore = new THREE.Vector3(0, -0.03, 0.24);
+  } else if (id === 'marksman') {
+    // DMR: long free-float handguard, 12-round box mag, adjustable stock, low-power scope
+    add(rb(0.064, 0.1, 0.36, 0.016), m.body, 0, 0.02, 0.07);
+    seam(0.0325, 0.02, 0.07, 0.34);
+    pins(0.0315, 0.0, [0.0, 0.18]);
+    port(0.035, 0.1, 0.08);
+    chargingHandle(0.066, -0.08);
+    add(rb(0.066, 0.07, 0.32, 0.018), m.polymer, 0, 0.022, 0.4);
+    slots(0.034, 0.022, 0.28, 5, 0.052, 0.03, 0.012);
+    add(rb(0.068, 0.012, 0.26, 0.004), m.accent, 0, 0.058, 0.4);
+    barrel(0.014, 0.22, 0.03, 0.66);
+    add(rb(0.026, 0.03, 0.03, 0.006), m.metal, 0, 0.03, 0.575); // gas block
+    muzzleBrake(0.014, 0.03, 0.79);
+    add(rb(0.052, 0.03, 0.09, 0.008), m.body, 0, -0.04, 0.13); // mag well
+    add(rb(0.04, 0.11, 0.075, 0.01), m.polymer, 0, -0.1, 0.135, 0.05);
+    for (let i = 0; i < 3; i++) add(rb(0.042, 0.004, 0.077, 0.0015), INSET, 0, -0.07 - i * 0.03, 0.137, 0.05);
+    add(rb(0.042, 0.1, 0.05, 0.012), m.polymer, 0, -0.07, -0.03, 0.3);
+    gripTex(-0.045, -0.035, 0.3, 4, 0.043);
+    triggerGuard(-0.03, 0.03);
+    add(rb(0.05, 0.085, 0.22, 0.02), m.polymer, 0, -0.005, -0.2, -0.04);
+    add(rb(0.04, 0.022, 0.12, 0.006), m.polymer, 0, 0.048, -0.2); // adjustable cheek riser
+    for (const s of [1, -1]) add(cyl(0.004, 0.004, 0.03, 8), m.metal, s * 0.014, 0.034, -0.2);
+    buttPad(-0.005, -0.315, 0.1, 0.056, -0.04);
+    for (const s of [1, -1]) { const leg = add(rb(0.01, 0.01, 0.16, 0.003), m.metal, 0.02 * s, -0.022, 0.46); void leg; } // folded bipod
+    rail(0.24, 0.074, 0.06);
+    sight = scope(0.1, 0.05, 0.2, 0.02); sightType = 'scope';
+    muzzle = new THREE.Vector3(0, 0.03, 0.83);
+    fore = new THREE.Vector3(0, -0.02, 0.4);
   } else if (id === 'smg') {
     add(rb(0.065, 0.09, 0.34, 0.015), m.body, 0, 0.02, 0.1);
     add(rb(0.067, 0.02, 0.2, 0.006), m.accent, 0, 0.07, 0.08);
@@ -365,7 +467,6 @@ export function buildGun(id, accent = 0xff8800, skin = 'default') {
     add(cyl(0.034, 0.034, 0.24, 14, 1, true), m.body, 0, 0.03, 0.42, Math.PI / 2);
     for (let i = 0; i < 6; i++) add(rb(0.07, 0.01, 0.014, 0.003), m.body, 0, 0.066, 0.33 + i * 0.035);
     muzzleBrake(0.024, 0.03, 0.72);
-    add(rb(0.03, 0.05, 0.1, 0.01), m.polymer, 0, 0.13, 0.22);
     for (const s of [1, -1]) { const leg = add(rb(0.012, 0.18, 0.012, 0.004), m.metal, 0.03 * s, -0.05, 0.6); leg.rotation.set(-0.9, 0, 0.25 * s); }
     add(rb(0.045, 0.11, 0.055, 0.012), m.polymer, 0, -0.07, -0.05, 0.3);
     triggerGuard(-0.035, 0.0);
@@ -375,9 +476,8 @@ export function buildGun(id, accent = 0xff8800, skin = 'default') {
     rail(0.16, 0.107, 0.02);
     seam(0.0455, 0.02, 0.08, 0.4);
     pins(0.045, 0.0, [-0.08, 0.05, 0.22]);
-    // Carry handle
-    for (const z of [0.16, 0.28]) add(rb(0.014, 0.05, 0.014, 0.004), m.metal, 0, 0.115, z);
-    add(rb(0.026, 0.014, 0.14, 0.006), m.polymer, 0, 0.145, 0.22);
+    // Low heat shield instead of a carry handle, so nothing sits in the sight line
+    add(rb(0.05, 0.008, 0.16, 0.003), m.body, 0, 0.104, 0.3);
     // Feed tray cover hinge
     add(cyl(0.008, 0.008, 0.094, 10), m.metal, 0, 0.095, -0.05, 0, 0, Math.PI / 2);
     gripTex(-0.05, -0.055, 0.3, 4, 0.046);
@@ -752,6 +852,9 @@ export class CharacterModel {
     this.spine.rotation.x = -p * 0.35 - this.hips.rotation.x;
     this.chest.rotation.x = -p * 0.5;
     this.neck.rotation.x = -p * 0.15;
+    // One-shot animations add to these below, so start from neutral every frame
+    this.neck.rotation.y = 0; this.neck.rotation.z = 0;
+    this.chest.rotation.y = 0;
     this.chest.rotation.z = Math.sin(ph) * 0.04 * amt;
 
     // ---- One-shot actions (abilities / gestures)

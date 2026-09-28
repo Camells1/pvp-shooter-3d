@@ -2,9 +2,9 @@
 import { WEAPONS, SHIELDS } from '../game/data.js';
 
 const CATS = [
-  { title: 'Sidearms', ids: ['classic', 'mpistol', 'cannon'] },
-  { title: 'SMGs & Shotguns', ids: ['smg', 'shotgun'] },
-  { title: 'Rifles', ids: ['scout', 'ar'] },
+  { title: 'Sidearms', ids: ['classic', 'shorty', 'mpistol', 'cannon'] },
+  { title: 'SMGs & Shotguns', ids: ['stinger', 'smg', 'shotgun'] },
+  { title: 'Rifles', ids: ['scout', 'carbine', 'marksman', 'ar'] },
   { title: 'Snipers & Heavy', ids: ['sniper', 'lmg'] }
 ];
 

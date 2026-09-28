@@ -55,7 +55,7 @@ Q and E recharge over time. The ultimate charges from kills, rounds, plants and 
 
 ## Weapons
 
-Pistol (free) · Machine Pistol ¤500 · Hand Cannon ¤900 · SMG ¤1500 · Shotgun ¤1800 · Scout ¤1100 · Assault Rifle ¤2900 · LMG ¤3200 · Sniper ¤4200
+Pistol (free) · Shorty ¤300 · Machine Pistol ¤500 · Hand Cannon ¤900 · Stinger ¤1100 · SMG ¤1500 · Shotgun ¤1800 · Scout ¤1100 · Carbine (bullpup) ¤2100 · Marksman ¤2500 · Assault Rifle ¤2900 · LMG ¤3200 · Sniper ¤4200
 
 ## Store & Locker
 

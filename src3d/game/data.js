@@ -1,6 +1,6 @@
 // Characters, abilities, weapons, shields, skins, economy. Distances are meters, times are seconds.
 
-export const VERSION = '2.4.2';
+export const VERSION = '2.5.0';
 
 // Each fighter has Q and E abilities (cooldowns) and an X ultimate (charged by points).
 export const CHARACTERS = [
@@ -101,12 +101,20 @@ export const WEAPONS = [
     spread: 0.018, moveSpread: 0.018, recoil: 0.008, falloff: [10, 30, 0.55], zoom: 1.2, adsSpread: 0.6, moveMul: 1 },
   { id: 'cannon', name: 'Hand Cannon', slot: 'sidearm', cat: 'Sidearms', price: 900, dmg: 52, head: 2.0, rate: 0.55, mag: 7, reload: 1.7, pellets: 1,
     spread: 0.005, moveSpread: 0.05, recoil: 0.06, falloff: [25, 60, 0.7], zoom: 1.4, adsSpread: 0.35, moveMul: 1 },
+  { id: 'shorty', name: 'Shorty', slot: 'sidearm', cat: 'Sidearms', price: 300, dmg: 12, head: 1.5, rate: 0.45, mag: 2, reload: 1.6, pellets: 12,
+    spread: 0.09, moveSpread: 0.01, recoil: 0.06, falloff: [5, 16, 0.15], zoom: 1.1, adsSpread: 0.85, moveMul: 1 },
+  { id: 'stinger', name: 'Stinger', slot: 'primary', cat: 'SMGs', price: 1100, dmg: 11, head: 1.5, rate: 0.058, mag: 20, reload: 1.8, pellets: 1,
+    spread: 0.02, moveSpread: 0.015, recoil: 0.006, falloff: [10, 30, 0.5], zoom: 1.25, adsSpread: 0.6, moveMul: 1 },
   { id: 'smg', name: 'SMG', slot: 'primary', cat: 'SMGs', price: 1500, dmg: 14, head: 1.6, rate: 0.072, mag: 30, reload: 1.7, pellets: 1,
     spread: 0.014, moveSpread: 0.016, recoil: 0.007, falloff: [14, 40, 0.55], zoom: 1.3, adsSpread: 0.6, moveMul: 1 },
   { id: 'shotgun', name: 'Shotgun', slot: 'primary', cat: 'Shotguns', price: 1800, dmg: 11, head: 1.5, rate: 0.85, mag: 6, reload: 2.0, pellets: 9,
     spread: 0.065, moveSpread: 0.01, recoil: 0.05, falloff: [7, 24, 0.2], zoom: 1.2, adsSpread: 0.75, moveMul: 0.97 },
   { id: 'ar', name: 'Assault Rifle', slot: 'primary', cat: 'Rifles', price: 2900, dmg: 30, head: 2.6, rate: 0.1, mag: 25, reload: 2.2, pellets: 1,
     spread: 0.005, moveSpread: 0.045, recoil: 0.012, falloff: [40, 90, 0.8], zoom: 1.6, adsSpread: 0.35, moveMul: 0.95 },
+  { id: 'carbine', name: 'Carbine', slot: 'primary', cat: 'Rifles', price: 2100, dmg: 27, head: 2.4, rate: 0.115, mag: 24, reload: 2.1, pellets: 1,
+    spread: 0.006, moveSpread: 0.04, recoil: 0.011, falloff: [35, 80, 0.75], zoom: 1.5, adsSpread: 0.4, moveMul: 0.96 },
+  { id: 'marksman', name: 'Marksman', slot: 'primary', cat: 'Rifles', price: 2500, dmg: 42, head: 2.3, rate: 0.3, mag: 12, reload: 2.3, pellets: 1,
+    spread: 0.004, moveSpread: 0.05, recoil: 0.03, falloff: [60, 130, 0.85], zoom: 1.9, adsSpread: 0.15, moveMul: 0.95 },
   { id: 'scout', name: 'Scout', slot: 'primary', cat: 'Rifles', price: 1100, dmg: 48, head: 2.2, rate: 0.7, mag: 8, reload: 1.9, pellets: 1,
     spread: 0.03, moveSpread: 0.04, recoil: 0.04, falloff: [60, 120, 0.85], zoom: 2.2, adsSpread: 0.06, moveMul: 0.98 },
   { id: 'sniper', name: 'Sniper', slot: 'primary', cat: 'Snipers', price: 4200, dmg: 110, head: 1.6, rate: 1.4, mag: 5, reload: 2.6, pellets: 1,
