@@ -30,16 +30,16 @@ class Updater {
     if (!app.isPackaged) return;
     try {
       this.set({ status: 'checking' });
-      const res = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { 'User-Agent': 'Riftline-Updater', Accept: 'application/vnd.github+json' } });
-      if (!res.ok) throw new Error('GitHub ' + res.status);
-      const rel = await res.json();
-      const latest = String(rel.tag_name || '').replace(/^v/, '');
+      // Follow the "latest release" link instead of the GitHub API (the API is rate limited per network)
+      const res = await fetch(RELEASES, { headers: { 'User-Agent': 'Riftline-Updater' } });
+      const m = /\/releases\/tag\/v?(\d+\.\d+\.\d+)/.exec(res.url);
+      if (!res.ok || !m) throw new Error('Could not read the latest release (' + res.status + ')');
+      const latest = m[1];
       // RIFTLINE_UPDATE_TEST=1 pretends to be an old version (for testing the update path)
       const current = process.env.RIFTLINE_UPDATE_TEST ? '0.0.0' : app.getVersion();
-      if (!latest || !newer(latest, current)) { this.set({ status: 'current' }); return; }
-      const want = this.portable ? /Portable.*\.exe$/i : /Setup.*\.exe$/i;
-      const asset = (rel.assets || []).find(a => want.test(a.name));
-      if (!asset) { this.set({ status: 'manual', latest }); return; }
+      if (!newer(latest, current)) { this.set({ status: 'current' }); return; }
+      const name = `Riftline-${this.portable ? 'Portable' : 'Setup'}-${latest}.exe`;
+      const asset = { name, browser_download_url: `https://github.com/${REPO}/releases/download/v${latest}/${name}` };
       await this.download(asset, latest);
     } catch (e) {
       this.set({ status: 'error', error: String(e.message || e) });
@@ -53,7 +53,7 @@ class Updater {
     this.set({ status: 'downloading', latest, progress: 0 });
     const res = await fetch(asset.browser_download_url, { headers: { 'User-Agent': 'Riftline-Updater' } });
     if (!res.ok || !res.body) throw new Error('Download failed (' + res.status + ')');
-    const total = +res.headers.get('content-length') || asset.size || 0;
+    const total = +res.headers.get('content-length') || 0;
     const ws = fs.createWriteStream(part);
     let got = 0, lastSent = 0;
     for await (const chunk of res.body) {
@@ -62,7 +62,8 @@ class Updater {
       if (total && got - lastSent > total / 50) { lastSent = got; this.set({ progress: got / total }); }
     }
     await new Promise((r, j) => ws.end(err => (err ? j(err) : r())));
-    if (asset.size && fs.statSync(part).size !== asset.size) throw new Error('Download was incomplete');
+    if (total && fs.statSync(part).size !== total) throw new Error('Download was incomplete');
+    if (fs.statSync(part).size < 1e6) throw new Error('Download is not an installer');
     fs.renameSync(part, out);
     this.file = out;
     this.set({ status: 'ready', latest, progress: 1 });
@@ -88,10 +89,11 @@ class Updater {
         spawn('cmd.exe', ['/c', `ping 127.0.0.1 -n 6 > nul & del "${old}"`], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
       }
     } else {
-      // Silent reinstall into this same folder, then launch the new version
-      const dir = path.dirname(process.execPath);
-      // NSIS wants /D= last and unquoted, so pass the arguments verbatim (argv0 quoted by hand)
-      spawn(this.file, ['/S', '--force-run', '--updated', `/D=${dir}`], { detached: true, stdio: 'ignore', windowsVerbatimArguments: true, argv0: `"${this.file}"` }).unref();
+      // Silent reinstall into this same folder, then launch the new version once the installer is done.
+      // cmd waits for the installer (start /wait) and then starts the game; NSIS wants /D= last and unquoted.
+      const dir = path.dirname(process.execPath), exe = path.join(dir, path.basename(process.execPath));
+      const line = `start "" /wait "${this.file}" /S --updated /D=${dir}&& start "" "${exe}"`;
+      spawn('cmd.exe', ['/d', '/s', '/c', `"${line}"`], { detached: true, stdio: 'ignore', windowsHide: true, windowsVerbatimArguments: true }).unref();
     }
     app.quit();
   }
