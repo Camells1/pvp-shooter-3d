@@ -1,7 +1,7 @@
 // First-person viewmodel: hands + gun rendered in their own pass so they never clip into walls.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { disposeMerged, buildGun, SIDEARMS } from './models.js';
+import { disposeMerged, buildGun, SIDEARMS, getArmorDetail } from './models.js';
 import { weaponById } from './data.js';
 
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0), _q = new THREE.Quaternion();
@@ -36,23 +36,41 @@ export class ViewModel {
   setChar(char) {
     if (this.arms) this.rig.remove(this.arms);
     this.char = char;
-    const sleeve = new THREE.MeshStandardMaterial({ color: char.color, metalness: 0.35, roughness: 0.4 });
+    const detail = getArmorDetail();
+    const sleeve = new THREE.MeshPhysicalMaterial({ color: char.color, metalness: 0.35, roughness: 0.38, clearcoat: 0.6, clearcoatRoughness: 0.25, bumpMap: detail, bumpScale: 1.4, roughnessMap: detail });
+    const sleeveDark = new THREE.MeshPhysicalMaterial({ color: new THREE.Color(char.color).multiplyScalar(0.45), metalness: 0.4, roughness: 0.45, clearcoat: 0.3, bumpMap: detail, bumpScale: 1.4, roughnessMap: detail });
     const suit = new THREE.MeshStandardMaterial({ color: 0x3b414c, metalness: 0.15, roughness: 0.62 });
-    const glove = new THREE.MeshStandardMaterial({ color: 0x2a2e35, metalness: 0.5, roughness: 0.45 });
+    const trim = new THREE.MeshStandardMaterial({ color: 0x3a3f47, metalness: 0.85, roughness: 0.32, bumpMap: detail, bumpScale: 0.8 });
+    const glove = new THREE.MeshStandardMaterial({ color: 0x1b1e23, metalness: 0.25, roughness: 0.7 });
     const glow = new THREE.MeshStandardMaterial({ color: 0x111111, emissive: char.accent, emissiveIntensity: 1.6 });
+    const box = (w, h, d, r, mat, x, y, z, parent) => { const m = new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 2, Math.min(r, w / 2 - 0.0005, h / 2 - 0.0005, d / 2 - 0.0005)), mat); m.position.set(x, y, z); parent.add(m); return m; };
     this.arms = new THREE.Group();
     this.rig.add(this.arms);
     this.limbs = [];
     for (let i = 0; i < 2; i++) {
+      // Local +Z points back toward the elbow; the hand sits at the origin, fingers reach toward -Z
       const fore = new THREE.Group();
-      const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.038, 0.3, 4, 10), suit);
+      const th = i === 0 ? -1 : 1; // thumb side (toward the middle of the gun)
+      const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.036, 0.3, 4, 12), suit);
       arm.rotation.x = Math.PI / 2; arm.position.z = 0.17; fore.add(arm);
-      const brace = new THREE.Mesh(new RoundedBoxGeometry(0.075, 0.075, 0.16, 2, 0.025), sleeve);
-      brace.position.z = 0.22; fore.add(brace);
-      const strip = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.012, 0.16), glow);
-      strip.position.set(0, 0.04, 0.22); fore.add(strip);
-      const hand = new THREE.Mesh(new RoundedBoxGeometry(0.075, 0.085, 0.1, 2, 0.025), glove);
-      fore.add(hand);
+      // Bracer: layered armor, glow strip, vents
+      box(0.08, 0.08, 0.17, 0.028, sleeve, 0, 0, 0.22, fore);
+      box(0.06, 0.02, 0.15, 0.008, sleeveDark, 0, 0.045, 0.22, fore);
+      box(0.012, 0.012, 0.13, 0.004, glow, 0, 0.057, 0.22, fore);
+      for (let k = 0; k < 3; k++) box(0.07, 0.006, 0.008, 0.002, glove, 0, 0.0, 0.17 + k * 0.03, fore).position.y = -0.041;
+      box(0.086, 0.086, 0.03, 0.012, trim, 0, 0, 0.115, fore);                 // wrist cuff
+      box(0.09, 0.09, 0.02, 0.008, sleeveDark, 0, 0, 0.32, fore);              // elbow-side cuff
+      // Gloved hand: palm, back-of-hand plate, four curled fingers, thumb
+      box(0.072, 0.052, 0.078, 0.016, glove, 0, 0, 0.0, fore);
+      box(0.06, 0.012, 0.05, 0.005, trim, 0, 0.03, 0.006, fore);               // knuckle plate
+      for (let f = 0; f < 4; f++) {
+        const x = -0.027 + f * 0.018, len = f === 0 || f === 3 ? 0.03 : 0.036;
+        box(0.016, 0.018, len, 0.006, glove, x, 0.0, -0.05 - len / 2 + 0.014, fore);
+        const tip = box(0.015, 0.016, 0.028, 0.006, glove, x, -0.02, -0.072 - len * 0.4, fore);
+        tip.rotation.x = 0.7;
+      }
+      const thumb = box(0.02, 0.02, 0.05, 0.007, glove, 0.04 * th, 0.006, -0.03, fore);
+      thumb.rotation.y = -0.45 * th;
       this.arms.add(fore);
       this.limbs.push(fore);
     }

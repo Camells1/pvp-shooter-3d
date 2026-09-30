@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<!-- Model gallery (dev only): npm run serve, then open http://localhost:5178/tools/gallery.html
+     ?view=chars  all agents, front and three-quarter
+     ?view=guns   every gun, side on
+     ?view=fp&w=ar&c=blaze  first-person hands + gun -->
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Riftline model gallery</title>
+  <style>html, body { margin: 0; background: #05070b; overflow: hidden; } canvas { display: block; }
+    #labels { position: fixed; inset: 0; pointer-events: none; font: 600 13px system-ui; color: #9fb3d0; }
+    #labels div { position: absolute; transform: translateX(-50%); white-space: nowrap; }</style>
+  <script type="importmap">
+    { "imports": { "three": "../node_modules/three/build/three.module.js", "three/addons/": "../vendor/three-addons/" } }
+  </script>
+</head>
+<body>
+<div id="labels"></div>
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { CHARACTERS, WEAPONS } from '../src3d/game/data.js';
+import { CharacterModel, buildGun } from '../src3d/game/models.js';
+import { ViewModel } from '../src3d/game/viewmodel.js';
+import { getEnvMap } from '../src3d/game/envmap.js';
+
+const q = new URLSearchParams(location.search);
+const view = q.get('view') || 'chars';
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1);
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b0f16);
+scene.environment = getEnvMap(renderer);
+scene.environmentIntensity = 0.35;
+scene.add(new THREE.HemisphereLight(0x8aa4d6, 0x1a1a22, 1.1));
+const key = new THREE.DirectionalLight(0xfff2e0, 3.2);
+key.position.set(4, 7, 8); key.castShadow = true; key.shadow.mapSize.set(2048, 2048);
+Object.assign(key.shadow.camera, { left: -12, right: 12, top: 8, bottom: -8 });
+key.shadow.bias = -0.0004; scene.add(key);
+const fill = new THREE.DirectionalLight(0x9ec4ff, 1.1); fill.position.set(-6, 3, 5); scene.add(fill);
+const rim = new THREE.DirectionalLight(0xff9fd0, 1.5); rim.position.set(0, 5, -8); scene.add(rim);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshStandardMaterial({ color: 0x151a22, roughness: 0.7 }));
+floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+
+const camera = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.01, 100);
+const labels = [];
+const label = (text, pos) => labels.push({ text, pos });
+const models = [];
+
+if (view === 'chars') {
+  const yaw = +(q.get('yaw') ?? 0);
+  CHARACTERS.forEach((c, i) => {
+    const m = new CharacterModel(c);
+    m.setWeapon(q.get('w') || { blaze: 'smg', tank: 'shotgun', ghost: 'sniper', volt: 'ar', frost: 'scout', nova: 'mpistol', echo: 'lmg' }[c.id]);
+    m.root.position.x = (i - 3) * 1.25;
+    scene.add(m.root); models.push({ m, yaw });
+    label(c.name, new THREE.Vector3(m.root.position.x, -0.05, 0));
+  });
+  const zoom = +(q.get('zoom') || 1);
+  camera.position.set(0, 1.2, 15 / zoom); camera.lookAt(0, 1.0, 0);
+  if (q.get('focus')) { const i = CHARACTERS.findIndex(c => c.id === q.get('focus')); camera.position.set((i - 3) * 1.25, 1.35, 4.2); camera.lookAt((i - 3) * 1.25, 1.05, 0); }
+} else if (view === 'guns') {
+  floor.visible = false;
+  const list = WEAPONS.map(w => w.id);
+  list.forEach((id, i) => {
+    const g = buildGun(id, 0xffb13d, q.get('skin') || 'default');
+    const col = i % 4, row = Math.floor(i / 4);
+    g.position.set((col - 1.5) * 1.05, 2.4 - row * 0.5, 0);
+    g.rotation.y = Math.PI / 2; // side on, muzzle to the right
+    scene.add(g);
+    label(id, new THREE.Vector3(g.position.x, g.position.y - 0.18, 0));
+  });
+  camera.position.set(0, 1.65, 9); camera.lookAt(0, 1.65, 0);
+}
+
+let vm = null;
+if (view === 'fp') {
+  vm = new ViewModel(getEnvMap(renderer));
+  vm.setChar(CHARACTERS.find(c => c.id === (q.get('c') || 'blaze')));
+  vm.setWeapon(q.get('w') || 'ar');
+  camera.fov = 90; camera.position.set(0, 1.6, 0); camera.lookAt(0, 1.6, -5);
+  const wall = new THREE.Mesh(new THREE.PlaneGeometry(40, 20), new THREE.MeshStandardMaterial({ color: 0x2a3140 }));
+  wall.position.set(0, 3, -12); scene.add(wall);
+}
+camera.updateProjectionMatrix();
+
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.45, 0.4, 0.9));
+composer.addPass(new OutputPass());
+
+const st = { vx: 0, vz: 0, yaw: 0, pitch: 0, grounded: true, dead: false, reload: -1 };
+for (const { m, yaw } of models) { m.setShadow(true); for (let i = 0; i < 5; i++) m.update(0.05, { ...st, yaw: yaw }); }
+if (vm) for (let i = 0; i < 20; i++) vm.update(0.05, { speed: 0, grounded: true, ads: q.get('ads') === '1', reload: -1 }, camera);
+composer.render();
+if (vm) { renderer.autoClear = false; renderer.clearDepth(); renderer.render(vm.scene, vm.camera); renderer.autoClear = true; }
+const el = document.getElementById('labels');
+for (const l of labels) {
+  const p = l.pos.clone().project(camera);
+  const d = document.createElement('div'); d.textContent = l.text;
+  d.style.left = (p.x * 0.5 + 0.5) * innerWidth + 'px'; d.style.top = (-p.y * 0.5 + 0.5) * innerHeight + 'px';
+  el.appendChild(d);
+}
+let tris = 0, calls = 0;
+scene.traverse(o => { if (o.isMesh && o.visible) { calls++; tris += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; } });
+window.__stats = { tris: Math.round(tris), calls, models: models.length };
+window.__ready = true;
+</script>
+</body>
+</html>
