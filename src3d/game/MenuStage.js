@@ -5,7 +5,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { CHARACTERS, charById } from './data.js';
-import { CharacterModel, buildGun, disposeMerged } from './models.js';
+import { CharacterModel, buildGun, disposeMerged, animateDragon } from './models.js';
 import { getEnvMap } from './envmap.js';
 
 function gridTexture() {
@@ -96,6 +96,7 @@ export class MenuStage {
     const box = new THREE.Box3().setFromObject(g);
     const size = box.getSize(new THREE.Vector3()), center = box.getCenter(new THREE.Vector3());
     g.position.sub(center);
+    this.gunObj = g;
     const holder = new THREE.Group(); holder.add(g);
     holder.scale.setScalar(1.35 / Math.max(size.x, size.y, size.z));
     this.gunGroup.add(holder);
@@ -118,6 +119,8 @@ export class MenuStage {
       this.gunGroup.visible = this.mode === 'gun';
       this.gunGroup.rotation.set(Math.sin(this.t * 0.5) * 0.1, -Math.PI / 2 + Math.sin(this.t * 0.6) * 0.45, 0);
       this.gunGroup.position.y = 1.45;
+      const ik = this.inspectT !== undefined && this.inspectT < 2.4 ? this.inspectT / 2.4 : -1;
+      if (this.gunObj && this.mode === 'gun') animateDragon(this.gunObj, dt, ik, -1);
       if (this.inspectT !== undefined && this.inspectT < 2.4) {
         this.inspectT += dt;
         const k = Math.min(1, this.inspectT / 2.4), e = k * k * k * (k * (6 * k - 15) + 10), env = Math.sin(k * Math.PI);

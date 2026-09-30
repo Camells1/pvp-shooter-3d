@@ -26,7 +26,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { CHARACTERS, WEAPONS, SKINS } from '../src3d/game/data.js';
-import { CharacterModel, buildGun } from '../src3d/game/models.js';
+import { CharacterModel, buildGun, animateDragon } from '../src3d/game/models.js';
 import { ViewModel } from '../src3d/game/viewmodel.js';
 import { getEnvMap } from '../src3d/game/envmap.js';
 import { tickSkins, skinBurst } from '../src3d/game/skins.js';
@@ -92,7 +92,7 @@ if (view === 'gun') {
   const g = buildGun(q.get('w') || 'ar', 0xffb13d, q.get('skin') || 'default');
   const box = new THREE.Box3().setFromObject(g), size = box.getSize(new THREE.Vector3()), ctr = box.getCenter(new THREE.Vector3());
   g.position.sub(ctr); const h = new THREE.Group(); h.add(g); h.position.y = 1.2; h.rotation.y = Math.PI / 2 - +(q.get('yaw') || 0);
-  h.rotation.x = +(q.get('pitch') || 0); scene.add(h); floor.visible = false; window.__turn = h;
+  h.rotation.x = +(q.get('pitch') || 0); scene.add(h); floor.visible = false; window.__turn = h; window.__gun = g;
   const d = Math.max(size.x, size.y, size.z) * 1.9;
   camera.position.set(0, 1.2, d); camera.lookAt(0, 1.2, 0);
 }
@@ -123,7 +123,8 @@ composer.addPass(new RenderPass(scene, camera));
 composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.45, 0.4, 0.9));
 composer.addPass(new OutputPass());
 
-tickSkins(+(q.get('t') || 1.3)); if (q.get('burst')) skinBurst(+q.get('burst'));
+tickSkins(+(q.get('t') || 1.3));
+if (window.__gun && (q.get('insp') || q.get('rlg'))) animateDragon(window.__gun, 0.016, q.get('insp') ? +q.get('insp') : -1, q.get('rlg') ? +q.get('rlg') : -1); if (q.get('burst')) skinBurst(+q.get('burst'));
 const rl = q.has('rl') ? +q.get('rl') : -1;
 // &mv=5 walks the agents forward (frozen mid-stride after &fr frames)
 const mv = +(q.get('mv') || 0), fr = +(q.get('fr') || 5);
@@ -149,11 +150,13 @@ if (q.get('step')) {
     tickSkins(dt);
     for (const { m, yaw } of models) m.update(dt, { ...st, yaw, vx: -Math.sin(yaw) * mv, vz: -Math.cos(yaw) * mv });
     if (vm) vm.update(dt, { speed: 0, grounded: true, ads: false, reload: -1 }, camera);
-    if (window.__turn) window.__turn.rotation.y += dt * 0.9;
+    if (window.__turn) window.__turn.rotation.y += dt * (window.__spin ?? 0.9);
+    if (window.__gun) { const ins = window.__insT; window.__insT = ins === undefined ? undefined : ins + dt; const rl = window.__rlT; window.__rlT = rl === undefined ? undefined : rl + dt;
+      animateDragon(window.__gun, dt, ins !== undefined && ins < 2.4 ? ins / 2.4 : -1, rl !== undefined && rl < 1.6 ? rl / 1.6 : -1); }
     composer.render();
     if (vm) { renderer.autoClear = false; renderer.clearDepth(); renderer.render(vm.scene, vm.camera); renderer.autoClear = true; }
   };
-  window.__play = k => { vm?.play(k); for (const { m } of models) m.play(k); if (k === 'inspect') skinBurst(); };
+  window.__play = k => { if (k === 'inspect') window.__insT = 0; if (k === 'reload') window.__rlT = 0; if (k === 'still') window.__spin = 0; vm?.play(k); for (const { m } of models) m.play(k); if (k === 'inspect') skinBurst(); };
 }
 window.__ready = true;
 </script>

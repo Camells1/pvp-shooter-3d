@@ -352,17 +352,31 @@ export function buildGun(id, accent = 0xff8800, skin = 'default') {
   let muzzle, grip = new THREE.Vector3(0, -0.07, 0), fore, sight, sightType = 'iron';
   if (id === 'knife') {
     // Combat knife held in a forward grip: handle through the fist, blade out along +Z. The blade takes the skin.
+    const talon = skin === 'fireflame';
     const sh = new THREE.Shape();
-    sh.moveTo(0, -0.017); sh.lineTo(0.15, -0.019); sh.quadraticCurveTo(0.225, -0.018, 0.262, 0.012);   // edge sweeping up to the tip
-    sh.lineTo(0.2, 0.019); sh.lineTo(0.17, 0.024); sh.lineTo(0.02, 0.024); sh.lineTo(0, 0.02); sh.lineTo(0, -0.017); // clipped spine
-    const bg = new THREE.ExtrudeGeometry(sh, { depth: 0.004, bevelEnabled: true, bevelThickness: 0.0035, bevelSize: 0.0035, bevelSegments: 2, curveSegments: 10 });
-    bg.translate(0, 0, -0.002);
-    const blade = add(bg, m.body, 0, -0.07, 0.075, 0, -Math.PI / 2, 0);
-    void blade;
-    add(rb(0.0035, 0.008, 0.15, 0.001), INSET, 0.0045, -0.066, 0.16); add(rb(0.0035, 0.008, 0.15, 0.001), INSET, -0.0045, -0.066, 0.16); // fullers
-    add(rb(0.0042, 0.004, 0.13, 0.0015), m.glow, 0.0048, -0.057, 0.16); add(rb(0.0042, 0.004, 0.13, 0.0015), m.glow, -0.0048, -0.057, 0.16); // glow strips
-    add(rb(0.012, 0.006, 0.05, 0.002), m.metal, 0, -0.047, 0.12);                                       // spine serration plate
-    for (let i = 0; i < 5; i++) add(rb(0.013, 0.004, 0.004, 0.001), m.metal, 0, -0.044, 0.1 + i * 0.01);
+    if (talon) {
+      // Fire Flame: one of the dragon's talons, a thick curved claw hooking down to a point
+      sh.moveTo(0, -0.024); sh.lineTo(0, 0.028); sh.quadraticCurveTo(0.19, 0.05, 0.215, -0.105);
+      sh.quadraticCurveTo(0.13, -0.03, 0, -0.024);
+    } else {
+      sh.moveTo(0, -0.017); sh.lineTo(0.15, -0.019); sh.quadraticCurveTo(0.225, -0.018, 0.262, 0.012);   // edge sweeping up to the tip
+      sh.lineTo(0.2, 0.019); sh.lineTo(0.17, 0.024); sh.lineTo(0.02, 0.024); sh.lineTo(0, 0.02); sh.lineTo(0, -0.017); // clipped spine
+    }
+    const bg = new THREE.ExtrudeGeometry(sh, { depth: talon ? 0.008 : 0.004, bevelEnabled: true, bevelThickness: talon ? 0.005 : 0.0035, bevelSize: talon ? 0.005 : 0.0035, bevelSegments: 3, curveSegments: 16 });
+    bg.translate(0, 0, talon ? -0.004 : -0.002);
+    if (talon) { const uv = bg.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * 7, uv.getY(i) * 7); }
+    add(bg, m.body, 0, -0.07, 0.075, 0, -Math.PI / 2, 0);
+    if (talon) {
+      // Knuckle scutes along the claw's back, a molten seam, horn spurs on the guard, a dragon eye in the pommel
+      for (let i = 0; i < 4; i++) add(rb(0.016 - i * 0.002, 0.008, 0.02, 0.003), m.horn, 0, -0.044 + (i === 3 ? -0.01 : 0), 0.09 + i * 0.035, -0.1 - i * 0.18);
+      add(rb(0.004, 0.004, 0.12, 0.0015), m.glow, 0, -0.084, 0.13, 0.28);
+      for (const sx of [1, -1]) { const sp = add(cyl(0, 0.006, 0.04, 6), m.horn, 0.02 * sx, -0.028, 0.062, 0.5, 0, -0.5 * sx); void sp; }
+    } else {
+      add(rb(0.0035, 0.008, 0.15, 0.001), INSET, 0.0045, -0.066, 0.16); add(rb(0.0035, 0.008, 0.15, 0.001), INSET, -0.0045, -0.066, 0.16); // fullers
+      add(rb(0.0042, 0.004, 0.13, 0.0015), m.glow, 0.0048, -0.057, 0.16); add(rb(0.0042, 0.004, 0.13, 0.0015), m.glow, -0.0048, -0.057, 0.16); // glow strips
+      add(rb(0.012, 0.006, 0.05, 0.002), m.metal, 0, -0.047, 0.12);                                       // spine serration plate
+      for (let i = 0; i < 5; i++) add(rb(0.013, 0.004, 0.004, 0.001), m.metal, 0, -0.044, 0.1 + i * 0.01);
+    }
     add(rb(0.03, 0.078, 0.016, 0.005), m.accent, 0, -0.066, 0.068);                                     // guard
     add(rb(0.034, 0.012, 0.02, 0.004), m.metal, 0, -0.03, 0.068);
     add(rb(0.028, 0.034, 0.13, 0.012), m.polymer, 0, -0.072, 0.0);                                      // handle
@@ -729,8 +743,102 @@ export function buildGun(id, accent = 0xff8800, skin = 'default') {
     hole.castShadow = false;
     add(tor(br * 1.35, br * 0.28), m.metal, bx, by, bz + 0.0005);
   }
-  g.userData = { muzzle, grip, fore, sight, sightType };
+  const dragon = skin === 'fireflame' ? addDragon(g, m, id, muzzle, sight) : null;
+  g.userData = { muzzle, grip, fore, sight, sightType, dragon };
   return mergeStatic(g);
+}
+
+// ---------------------------------------------------------------- Fire Flame bundle
+// Turns any gun into a dragon: a head round the muzzle with a hinged jaw, horns and glowing eyes, spines down its
+// back and folded wings on its flanks. animateDragon() opens the jaw, breathes fire and spreads the wings
+// (inspect: a roar; reload: a smoky breath). The knife version is a talon (see the knife branch) with an eye.
+const _ray = new THREE.Raycaster(), _rv = new THREE.Vector3(), _rd = new THREE.Vector3();
+function surfaceHit(g, from, dir) {
+  _ray.set(from, dir); _ray.far = 2;
+  return _ray.intersectObject(g, true).find(h => h.object.isMesh && !h.object.material.transparent && h.object.visible) || null;
+}
+function dragonEye() { return new THREE.MeshStandardMaterial({ color: 0x220800, emissive: 0xffb020, emissiveIntensity: 2.2 }); }
+function addDragon(g, m, id, muzzle, sight) {
+  const eyeMat = dragonEye();
+  const d = { t: Math.random() * 10, eyeMat, wings: [], jaw: null, fire: null };
+  if (id === 'knife') {
+    mesh(sph(0.009, 12, 8), eyeMat, 0, -0.07, -0.086, g);                                   // eye in the pommel
+    return d;
+  }
+  g.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(g), len = box.max.z - box.min.z;
+  const k = THREE.MathUtils.clamp(len / 0.8, 0.75, 1.15);                                   // bigger guns, bigger dragon
+  // Spines down its back, following the top of the gun
+  for (let z = box.min.z + 0.05; z < muzzle.z - 0.16 * k; z += 0.045 * k) {
+    if (sight && Math.abs(z - sight.z) < 0.07) continue;
+    const h = surfaceHit(g, _rv.set(0, box.max.y + 0.1, z), _rd.set(0, -1, 0));
+    if (!h) continue;
+    const sp = mesh(cyl(0, 0.0075 * k, 0.026 * k, 6), m.horn, 0, h.point.y + 0.009 * k, z, g); sp.rotation.x = -0.45;
+  }
+  // Folded wings on both flanks, a third of the way from the back
+  const zw = box.min.z + len * 0.32, yw = (box.min.y + box.max.y) / 2 + 0.03;
+  const wingShape = new THREE.Shape();
+  wingShape.moveTo(0, 0); wingShape.lineTo(0.03, 0.09); wingShape.lineTo(0.06, 0.05); wingShape.lineTo(0.1, 0.12); wingShape.lineTo(0.12, 0.05);
+  wingShape.lineTo(0.18, 0.1); wingShape.lineTo(0.17, 0.03); wingShape.quadraticCurveTo(0.12, 0.0, 0.1, 0.02); wingShape.quadraticCurveTo(0.06, -0.01, 0, 0);
+  const wingGeo = new THREE.ShapeGeometry(wingShape, 8);
+  for (const sx of [1, -1]) {
+    const h = surfaceHit(g, _rv.set(0.4 * sx, yw, zw), _rd.set(-sx, 0, 0));
+    const x = h ? h.point.x : 0.035 * sx;
+    const w = new THREE.Group(); w.position.set(x + 0.003 * sx, yw, zw + 0.03 * k); w.scale.setScalar(k); g.add(w);
+    const mem = mesh(wingGeo, m.wing, 0, 0, 0, w); mem.rotation.y = Math.PI / 2;
+    for (const [bx, by, bz] of [[0.03, 0.09, 0], [0.1, 0.12, 0], [0.18, 0.1, 0]]) {             // finger bones
+      const b = new THREE.Vector3(0, by, -bx), L = b.length();
+      const bone = mesh(cyl(0.0015, 0.004, L, 5), m.horn, 0, by / 2, -bx / 2, w);
+      bone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.normalize()); void bz;
+    }
+    d.wings.push({ w, sx });
+  }
+  // Head round the muzzle: skull above the barrel, hinged lower jaw below it, the muzzle sits in the mouth
+  const head = new THREE.Group(); head.position.set(0, muzzle.y, muzzle.z); head.scale.setScalar(k); g.add(head);
+  const Lf = (rings, mat, parent, o = {}) => { const s = mesh(loft(rings, o), mat, 0, 0, 0, parent); s.rotation.x = Math.PI / 2; return s; };
+  Lf([[-0.14, 0.028, 0.026, -0.03], [-0.1, 0.036, 0.034, -0.034], [-0.06, 0.033, 0.027, -0.031], [-0.02, 0.025, 0.018, -0.025], [0.02, 0.018, 0.012, -0.021], [0.045, 0.009, 0.007, -0.019]], m.body, head, { n: 2.4, seg: 18 });
+  for (const sx of [1, -1]) {
+    mesh(sph(0.0075, 10, 8), eyeMat, 0.026 * sx, 0.047, -0.07, head);                     // eyes
+    const brow = mesh(rb(0.016, 0.006, 0.026, 0.003), m.horn, 0.022 * sx, 0.056, -0.066, head); brow.rotation.z = -0.35 * sx;
+    const horn = mesh(cyl(0.0015, 0.008, 0.1, 8), m.horn, 0.022 * sx, 0.075, -0.15, head);    // horns sweep back and out
+    horn.rotation.set(-1.15, 0, -0.3 * sx);
+    mesh(sph(0.003, 6, 5), m.glow, 0.007 * sx, 0.03, 0.04, head);                          // nostrils
+    for (let i = 0; i < 4; i++) { const t = mesh(cyl(0, 0.0035, 0.013, 6), m.bone, 0.014 * sx, 0.008, -0.03 + i * 0.018, head); t.rotation.x = Math.PI; } // upper fangs
+  }
+  const jaw = new THREE.Group(); jaw.position.set(0, -0.012, -0.1); head.add(jaw);
+  Lf([[0.0, 0.026, 0.014, 0.012], [0.05, 0.022, 0.011, 0.014], [0.1, 0.015, 0.008, 0.012], [0.135, 0.008, 0.005, 0.009]], m.body, jaw, { n: 2.4, seg: 14 });
+  for (const sx of [1, -1]) for (let i = 0; i < 3; i++) mesh(cyl(0, 0.003, 0.011, 6), m.bone, 0.012 * sx, 0.002, 0.07 + i * 0.02, jaw);   // lower fangs
+  // Fire breath: two additive cones out of the mouth, hidden until it breathes
+  const fire = new THREE.Group(); fire.position.set(0, 0, 0.05); head.add(fire);
+  const fm = (c, o) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: o, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
+  for (const [r, l, c, o] of [[0.05, 0.3, 0xff5a10, 0.55], [0.025, 0.22, 0xffd070, 0.8]]) {
+    const cone = new THREE.Mesh(cyl(r, 0.004, l, 14), fm(c, o)); cone.rotation.x = Math.PI / 2; cone.position.z = l / 2; cone.castShadow = false; fire.add(cone);
+  }
+  fire.visible = false; fire.scale.setScalar(0.001);
+  Object.assign(d, { jaw, fire, head });
+  return d;
+}
+
+// insp / rl: 0..1 progress of an inspect / reload, or -1 when not playing
+export function animateDragon(gun, dt, insp = -1, rl = -1) {
+  const d = gun?.userData?.dragon;
+  if (!d) return;
+  d.t += dt;
+  const ie = insp >= 0 ? Math.sin(Math.PI * insp) : 0;
+  const roar = insp >= 0 ? Math.max(0, Math.sin(Math.PI * THREE.MathUtils.clamp((insp - 0.35) / 0.4, 0, 1))) : 0;
+  const breath = rl >= 0 ? Math.sin(Math.PI * THREE.MathUtils.clamp(rl / 0.7, 0, 1)) : 0;
+  const idle = 0.04 + 0.03 * Math.sin(d.t * 1.3);
+  d.eyeMat.emissiveIntensity = 2 + 5 * Math.max(roar, breath) + 0.5 * Math.sin(d.t * 2.1);
+  if (!d.jaw) return;
+  d.jaw.rotation.x = Math.max(idle, roar * 0.62, breath * 0.4);
+  d.head.rotation.x = -roar * 0.12;
+  const f = Math.max(roar, breath * 0.6);
+  d.fire.visible = f > 0.03;
+  if (d.fire.visible) { const fl = 0.85 + 0.15 * Math.sin(d.t * 37) * Math.sin(d.t * 23); d.fire.scale.set(f * fl, f * fl, f * (0.8 + 0.4 * fl)); }
+  for (const { w, sx } of d.wings) {
+    const flap = ie > 0.5 ? Math.sin(d.t * 9) * 0.15 * ie : 0;
+    w.rotation.set(-0.9 * (1 - ie), 0, -sx * (ie * 1.1 + flap));
+  }
 }
 
 // ---------------------------------------------------------------- Shield bubble
@@ -1323,7 +1431,8 @@ export class CharacterModel {
     if (act === 'blink') this.body.scale.set(bs.x * (1 - 0.3 * env), bs.y * (1 + 0.35 * env), bs.z * (1 - 0.3 * env));
     else this.body.scale.copy(bs);
 
-    // Gun: recoil + reload motion + action poses
+    // Gun: recoil + reload motion + action poses (a Fire Flame gun also roars / breathes fire)
+    animateDragon(this.gun, dt, act === 'inspect' ? k : -1, s.reload >= 0 ? s.reload : -1);
     this.recoil = Math.max(0, this.recoil - dt * 6);
     const g = this.gunMount;
     g.position.copy(this.gunBase);

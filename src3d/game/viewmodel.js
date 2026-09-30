@@ -1,7 +1,7 @@
 // First-person viewmodel: hands + gun rendered in their own pass so they never clip into walls.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { disposeMerged, buildGun, SIDEARMS, getArmorDetail, loft, pod, band, grow, keyed, INSPECT_GUN, INSPECT_KNIFE, SLASH, STAB } from './models.js';
+import { disposeMerged, buildGun, SIDEARMS, getArmorDetail, loft, pod, band, grow, keyed, INSPECT_GUN, INSPECT_KNIFE, SLASH, STAB, animateDragon } from './models.js';
 import { weaponById } from './data.js';
 import { reloadAnim, makePropMesh } from './reload.js';
 
@@ -165,6 +165,7 @@ export class ViewModel {
     // Reload pose comes from reload.js (gun tilt + where the off hand is); null when not reloading
     const R = s.reload >= 0 && this.gun ? reloadAnim(this.weaponId, s.reload, this.gun.userData.fore) : null;
     const lift = R ? R.pose.lift : 0;
+    animateDragon(this.gun, dt, act === 'inspect' ? k : -1, s.reload >= 0 ? s.reload : -1);
     const hx = hip[0] + (ads[0] - hip[0]) * a - lift * 0.07;
     const hy = hip[1] + (ads[1] - hip[1]) * a + lift * 0.17;
     const hz = hip[2] + (ads[2] - hip[2]) * a;

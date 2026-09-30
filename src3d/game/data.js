@@ -172,8 +172,11 @@ export const SKINS = [
   // Animated: the surface moves (see ANIM_GLSL in skins.js) and flares when you inspect
   { id: 'glitch', name: 'Glitchwave', price: 2400, tier: 'Mythic', animated: true },
   { id: 'plasma', name: 'Plasma Flow', price: 2200, tier: 'Mythic', animated: true },
-  { id: 'inferno', name: 'Inferno', price: 2200, tier: 'Mythic', animated: true }
+  { id: 'inferno', name: 'Inferno', price: 2200, tier: 'Mythic', animated: true },
+  // Bundle skin: every gun becomes a dragon (head at the muzzle, horns, spine, wings) and the knife becomes a talon
+  { id: 'fireflame', name: 'Fire Flame', price: 3200, tier: 'Mythic', animated: true, bundle: 'fireflame' }
 ];
+export const BUNDLES = [{ id: 'fireflame', name: 'FIRE FLAME', skin: 'fireflame', price: 9900, blurb: 'Every gun becomes a dragon. The knife is one of its talons.' }];
 export const COINS = { start: 500, match: 50, win: 100, kill: 10, round: 5 };
 
 export const ECON = { start: 800, win: 3000, loss: 1900, lossStep: 500, lossMax: 2900, kill: 200, plant: 300, max: 9000 };

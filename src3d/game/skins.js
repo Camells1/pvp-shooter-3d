@@ -92,6 +92,28 @@ const TEX = {
     x.strokeStyle = '#ff7a1a'; x.lineWidth = 2;
     for (let i = 0; i < 18; i++) { x.beginPath(); let px = rnd() * S, py = rnd() * S; x.moveTo(px, py); for (let k = 0; k < 5; k++) { px += (rnd() - 0.5) * 40; py += (rnd() - 0.5) * 40; x.lineTo(px, py); } x.stroke(); }
   }),
+  // Fire Flame bundle: charred black dragon scales, molten light in the gaps between them
+  fireScales: () => tex((x, S) => {
+    x.fillStyle = '#1a0604'; x.fillRect(0, 0, S, S);
+    const s = 18;
+    for (let j = 0; j < S / (s * 0.7) + 2; j++) for (let i = 0; i < S / s + 2; i++) {
+      const cx = i * s + (j % 2) * s / 2, cy = j * s * 0.7;
+      const g = x.createRadialGradient(cx, cy - 5, 1, cx, cy, s * 0.62);
+      g.addColorStop(0, '#4a1a12'); g.addColorStop(0.6, '#2a0c08'); g.addColorStop(1, '#120403');
+      x.fillStyle = g; x.beginPath(); x.arc(cx, cy, s * 0.56, 0, Math.PI); x.fill();
+      x.strokeStyle = 'rgba(200,110,40,0.35)'; x.lineWidth = 1; x.stroke();
+    }
+  }),
+  fireScalesGlow: () => tex((x, S) => {
+    x.fillStyle = '#000'; x.fillRect(0, 0, S, S);
+    const s = 18;
+    x.strokeStyle = '#ff6a10'; x.lineWidth = 2.2;
+    for (let j = 0; j < S / (s * 0.7) + 2; j++) for (let i = 0; i < S / s + 2; i++) {
+      const cx = i * s + (j % 2) * s / 2, cy = j * s * 0.7;
+      x.globalAlpha = 0.35 + rnd() * 0.65; x.beginPath(); x.arc(cx, cy, s * 0.56, 0, Math.PI); x.stroke();
+    }
+    x.globalAlpha = 1;
+  }),
   galaxy: () => tex((x, S) => {
     const g = x.createRadialGradient(S * 0.4, S * 0.5, 10, S * 0.5, S * 0.5, S * 0.8);
     g.addColorStop(0, '#5b2a9a'); g.addColorStop(0.5, '#23104a'); g.addColorStop(1, '#070312');
@@ -175,6 +197,11 @@ const ANIM_GLSL = {
     float pulse = 0.5 + 0.5 * sin(uTime * 3.0 - q.z * 0.8);
     vec3 c = mix(vec3(0.35, 0.1, 1.0), vec3(0.1, 0.85, 1.0), pulse);
     totalEmissiveRadiance += c * (vein * 2.6 + 0.12) * (1.0 + uBurst * 3.0);`,
+  // Fire Flame: embers breathing in the gaps between the scales, a slow wave of heat running along the body
+  ember: `
+    float w = 0.5 + 0.5 * sin(vAPos.z * 38.0 - uTime * 3.2 + sin(vAPos.y * 55.0 + uTime * 1.7) * 1.4);
+    totalEmissiveRadiance *= (0.25 + 1.6 * w) * (1.0 + uBurst * 3.0);
+    totalEmissiveRadiance += vec3(1.0, 0.32, 0.03) * pow(max(0.0, sin(vAPos.z * 18.0 - uTime * 5.0)), 16.0) * (0.6 + uBurst * 2.0);`,
   // Flames licking up the sides
   inferno: `
     vec3 q = vAPos * 16.0;
@@ -232,6 +259,16 @@ export function skinMats(skin = 'default', accent = 0xff8800) {
     case 'galaxy':
       m = { body: M({ map: T('galaxy'), metalness: 0.3, roughness: 0.25, emissiveMap: T('galaxyStars'), emissive: 0xffffff, emissiveIntensity: 1.6 }), metal: M({ color: 0x3a2a5a, metalness: 0.9, roughness: 0.2 }), polymer: M({ map: T('galaxy'), metalness: 0.2, roughness: 0.4, emissiveMap: T('galaxyStars'), emissive: 0xffffff, emissiveIntensity: 1.2 }), accent: M({ color: 0x111111, emissive: 0xb86bff, emissiveIntensity: 2 }), glow: glow(0xff4ad8) };
       break;
+    case 'fireflame': {
+      m = { body: animate(M({ map: T('fireScales'), metalness: 0.35, roughness: 0.42, emissiveMap: T('fireScalesGlow'), emissive: 0xffffff, emissiveIntensity: 1.5 }), 'ember'),
+        metal: M({ color: 0x8a5a1c, metalness: 1, roughness: 0.28 }), polymer: M({ map: T('fireScales'), metalness: 0.2, roughness: 0.6 }),
+        accent: M({ color: 0xc8902a, metalness: 1, roughness: 0.22 }), glow: glow(0xff5a0a) };
+      // Wing membranes: thin, lit from behind, both sides visible
+      m.wing = animate(M({ map: T('fireScales'), color: 0x9a4a30, metalness: 0.1, roughness: 0.6, emissiveMap: T('fireScalesGlow'), emissive: 0xff7a30, emissiveIntensity: 0.9, side: THREE.DoubleSide }), 'ember');
+      m.horn = M({ color: 0x2a1a12, metalness: 0.3, roughness: 0.35 });
+      m.bone = M({ color: 0xe8dcc0, metalness: 0.05, roughness: 0.45 });
+      break;
+    }
     case 'glitch':
       m = { body: animate(M({ color: 0x1a1426, metalness: 0.55, roughness: 0.28 }), 'glitch'), metal: M({ color: 0xc9c2d8, metalness: 1, roughness: 0.18 }), polymer: animate(M({ color: 0x0d0a14, metalness: 0.3, roughness: 0.4 }), 'glitch'), accent: M({ color: 0x111111, emissive: 0xff2f9a, emissiveIntensity: 2.2 }), glow: glow(0x2ff0ff) };
       break;

@@ -1,6 +1,6 @@
 // Riftline app entry: renderer, menus, shop, matchmaking, lobby, match lifecycle.
 import * as THREE from 'three';
-import { CHARACTERS, charById, WEAPONS, SKINS, COINS, VERSION } from './game/data.js';
+import { CHARACTERS, charById, WEAPONS, SKINS, BUNDLES, COINS, VERSION } from './game/data.js';
 import { MAPS } from './game/maps.js';
 import { MenuStage } from './game/MenuStage.js';
 import { tickSkins, skinBurst } from './game/skins.js';
@@ -287,7 +287,7 @@ function dailyStore() {
   let seed = d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
   const pool = [];
-  for (const w of WEAPONS) for (const k of SKINS) if (k.price) pool.push({ w: w.id, k: k.id });
+  for (const w of WEAPONS) for (const k of SKINS) if (k.price && !k.bundle) pool.push({ w: w.id, k: k.id });
   for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
   const featured = pool.find(o => ['Exclusive', 'Ultra'].includes(skinById(o.k).tier));
   const offers = pool.filter(o => o !== featured).slice(0, 6);
@@ -299,6 +299,21 @@ function openStore() {
   const { featured } = dailyStore();
   storeSel = storeSel || featured;
   renderStore();
+}
+// Bundles: one price for the skin on every weapon, knife included. Preview cycles through the guns.
+const bundleOwned = b => WEAPONS.every(w => owns(w.id, b.skin));
+function renderBundle() {
+  const b = BUNDLES[0], sel = storeSel.bundle === b.id, have = bundleOwned(b);
+  $('#store-bundle').className = 'bundle' + (sel ? ' sel' : '');
+  $('#store-bundle').innerHTML = `<div class="bn">${b.name}</div><div class="bb">${b.blurb}</div><div class="fp">${have ? 'OWNED' : '◈ ' + b.price.toLocaleString()} <span class="muted small">· ${WEAPONS.length} items</span></div>`;
+  if (!sel) return false;
+  const w = WEAPONS[storeSel.wi % WEAPONS.length], k = skinById(b.skin), allOn = WEAPONS.every(x => profile.equipped[x.id] === b.skin);
+  $('#store-preview').innerHTML = `<div class="pv-name">${b.name}${animTag(k)}</div><div class="pv-sub">${wName(w.id)} · ${storeSel.wi % WEAPONS.length + 1}/${WEAPONS.length} · <span style="color:${TIER_COL[k.tier]}">BUNDLE</span></div>` +
+    `<div class="pv-row"><button class="btn" id="bundle-prev">‹</button><button class="btn" id="store-inspect">Inspect</button><button class="btn" id="bundle-next">›</button></div>` +
+    (have ? (allOn ? '<button class="btn" disabled>Equipped</button>' : '<button class="btn big green" id="bundle-equip">Equip all</button>')
+      : `<button class="btn big gold" id="bundle-buy" ${profile.coins < b.price ? 'disabled' : ''}>${profile.coins < b.price ? `Need ◈ ${(b.price - profile.coins).toLocaleString()} more` : `Buy bundle for ◈ ${b.price.toLocaleString()}`}</button>`);
+  stage.showGun(w.id, b.skin);
+  return true;
 }
 function renderStore() {
   const { featured, offers } = dailyStore();
@@ -312,6 +327,7 @@ function renderStore() {
       <div><div class="on">${k.name}${animTag(k)}</div><div class="ow">${wName(o.w)}</div></div>
       <div class="op">${have ? 'OWNED' : '◈ ' + k.price.toLocaleString()}</div></button>`;
   }).join('');
+  if (renderBundle()) { stage.setMode('gun'); renderCoins(); return; }
   const k = skinById(storeSel.k), have = owns(storeSel.w, storeSel.k), equipped = profile.equipped[storeSel.w] === storeSel.k;
   $('#store-preview').innerHTML = `<div class="pv-name">${k.name}${animTag(k)}</div><div class="pv-sub">${wName(storeSel.w)} · <span style="color:${TIER_COL[k.tier]}">${k.tier}</span></div><button class="btn" id="store-inspect">Inspect</button>` +
     (have ? (equipped ? '<button class="btn" disabled>Equipped</button>' : '<button class="btn big green" id="store-equip">Equip</button>')
@@ -321,6 +337,7 @@ function renderStore() {
   renderCoins();
 }
 $('#store-featured').addEventListener('click', () => { storeSel = dailyStore().featured; renderStore(); });
+$('#store-bundle').addEventListener('click', () => { if (!storeSel.bundle) { storeSel = { bundle: BUNDLES[0].id, wi: WEAPONS.findIndex(w => w.id === 'ar') }; renderStore(); } });
 $('#store-offers').addEventListener('click', e => { const b = e.target.closest('.offer'); if (b) { storeSel = dailyStore().offers[+b.dataset.i]; renderStore(); } });
 $('#store-preview').addEventListener('click', e => {
   if (e.target.id === 'store-buy') {
@@ -332,6 +349,18 @@ $('#store-preview').addEventListener('click', e => {
     saveProfile(); sfx.pickup();
     toast(`${k.name} ${wName(storeSel.w)} unlocked and equipped`, 2500, true);
     renderStore();
+  }
+  if (e.target.id === 'bundle-prev' || e.target.id === 'bundle-next') { storeSel.wi = (storeSel.wi + (e.target.id === 'bundle-next' ? 1 : WEAPONS.length - 1)) % WEAPONS.length; renderStore(); }
+  if (e.target.id === 'bundle-buy' || e.target.id === 'bundle-equip') {
+    const b = BUNDLES.find(x => x.id === storeSel.bundle);
+    if (e.target.id === 'bundle-buy') {
+      if (profile.coins < b.price || bundleOwned(b)) return;
+      profile.coins -= b.price;
+      for (const w of WEAPONS) if (!owns(w.id, b.skin)) profile.owned.push(w.id + ':' + b.skin);
+      sfx.pickup(); toast(`${b.name} unlocked on every weapon and equipped`, 2500, true);
+    }
+    for (const w of WEAPONS) profile.equipped[w.id] = b.skin;
+    saveProfile(); renderStore();
   }
   if (e.target.id === 'store-inspect') { stage.inspectGun(); skinBurst(); sfx.inspect?.(); }
   if (e.target.id === 'store-equip') { profile.equipped[storeSel.w] = storeSel.k; saveProfile(); renderStore(); }

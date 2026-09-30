@@ -481,6 +481,19 @@ input[type=checkbox] { accent-color: var(--cyan); width: 16px; height: 16px; }
 .featured .fw { font-size: 14px; letter-spacing: 3px; color: #cfd8e6; text-transform: uppercase; }
 .featured .fp { font-size: 22px; color: var(--gold); font-weight: 800; }
 .featured.sel { box-shadow: 0 0 30px rgba(255,61,90,.4); }
+.store-left { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.store-left .featured { flex: 1; }
+.bundle { position: relative; border-radius: 16px; padding: 38px 20px 16px; overflow: hidden; cursor: pointer; background: radial-gradient(120% 90% at 85% 0%, rgba(255,150,40,.55), transparent 60%), linear-gradient(160deg, #5a1606, #1a0604 70%); border: 1px solid rgba(255,140,40,.6); display: flex; flex-direction: column; gap: 4px; transition: box-shadow .15s; }
+.bundle::before { content: 'BUNDLE'; position: absolute; top: 14px; left: 18px; font-size: 12px; letter-spacing: 4px; color: #ffd166; }
+.bundle::after { content: ''; position: absolute; inset: 0; background: linear-gradient(0deg, rgba(255,90,10,.35), transparent 45%); animation: ember 2.4s ease-in-out infinite alternate; pointer-events: none; }
+@keyframes ember { from { opacity: .35; } to { opacity: 1; } }
+.bundle .bn { font-size: 30px; font-weight: 900; letter-spacing: 4px; line-height: 1; background: linear-gradient(0deg, #ff4a0a, #ffd166); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.bundle .bb { font-size: 13px; color: #f3d6c4; }
+.bundle .fp { font-size: 20px; color: var(--gold); font-weight: 800; }
+.bundle.sel, .bundle:hover { box-shadow: 0 0 30px rgba(255,110,20,.45); }
+.store-preview .pv-row { display: flex; gap: 8px; }
+.store-preview .pv-row .btn { min-width: 0; }
+.store-preview .pv-row #store-inspect { min-width: 180px; }
 .store-preview { display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 10px; padding-bottom: 8px; }
 .store-preview .pv-name { font-size: 26px; font-weight: 800; letter-spacing: 3px; text-shadow: 0 2px 10px #000; }
 .store-preview .pv-sub { font-size: 13px; letter-spacing: 3px; color: #cfd8e6; text-shadow: 0 2px 6px #000; }
