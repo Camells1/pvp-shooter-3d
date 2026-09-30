@@ -3,7 +3,8 @@
      ?view=chars  all agents, front and three-quarter
      ?view=guns   every gun, side on
      ?view=fp&w=ar&c=blaze  first-person hands + gun
-     add &rl=0..1 to freeze a reload animation at that point (chars and fp) -->
+     add &rl=0..1 to freeze a reload animation at that point (chars and fp), &mv=5&fr=7 to freeze a walk
+     ?view=chars&focus=rook&dist=2.6&ly=1.3  close-up of one agent -->
 <html>
 <head>
   <meta charset="utf-8">
@@ -68,7 +69,7 @@ if (view === 'chars') {
   });
   const zoom = +(q.get('zoom') || 1);
   camera.position.set(0, 1.2, 19 / zoom); camera.lookAt(0, 1.0, 0);
-  if (q.get('focus')) { const i = CHARACTERS.findIndex(c => c.id === q.get('focus')), fx = (i - (CHARACTERS.length - 1) / 2) * 1.25; camera.position.set(fx, 1.35, 4.2); camera.lookAt(fx, 1.05, 0); }
+  if (q.get('focus')) { const i = CHARACTERS.findIndex(c => c.id === q.get('focus')), fx = (i - (CHARACTERS.length - 1) / 2) * 1.25; const dist = +(q.get('dist') || 4.2), ly = +(q.get('ly') || 1.05); camera.position.set(fx, ly + 0.3, dist); camera.lookAt(fx, ly, 0); }
 } else if (view === 'guns') {
   floor.visible = false;
   const list = WEAPONS.map(w => w.id);
@@ -120,8 +121,10 @@ composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight),
 composer.addPass(new OutputPass());
 
 const rl = q.has('rl') ? +q.get('rl') : -1;
+// &mv=5 walks the agents forward (frozen mid-stride after &fr frames)
+const mv = +(q.get('mv') || 0), fr = +(q.get('fr') || 5);
 const st = { vx: 0, vz: 0, yaw: 0, pitch: 0, grounded: true, dead: false, reload: rl };
-for (const { m, yaw } of models) { m.setShadow(true); for (let i = 0; i < 5; i++) m.update(0.05, { ...st, yaw: yaw }); }
+for (const { m, yaw } of models) { m.setShadow(true); for (let i = 0; i < fr; i++) m.update(0.05, { ...st, yaw, vx: -Math.sin(yaw) * mv, vz: -Math.cos(yaw) * mv }); }
 if (vm) for (let i = 0; i < 20; i++) vm.update(0.05, { speed: 0, grounded: true, ads: q.get('ads') === '1', reload: rl }, camera);
 composer.render();
 if (vm) { renderer.autoClear = false; renderer.clearDepth(); renderer.render(vm.scene, vm.camera); renderer.autoClear = true; }

@@ -1,7 +1,7 @@
 // First-person viewmodel: hands + gun rendered in their own pass so they never clip into walls.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { disposeMerged, buildGun, SIDEARMS, getArmorDetail } from './models.js';
+import { disposeMerged, buildGun, SIDEARMS, getArmorDetail, loft, pod, band, grow } from './models.js';
 import { weaponById } from './data.js';
 import { reloadAnim, makePropMesh } from './reload.js';
 
@@ -54,15 +54,18 @@ export class ViewModel {
       const th = i === 0 ? -1 : 1; // thumb side (toward the middle of the gun)
       const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.036, 0.3, 4, 12), suit);
       arm.rotation.x = Math.PI / 2; arm.position.z = 0.17; fore.add(arm);
-      // Bracer: layered armor, glow strip, vents
-      box(0.08, 0.08, 0.17, 0.028, sleeve, 0, 0, 0.22, fore);
-      box(0.06, 0.02, 0.15, 0.008, sleeveDark, 0, 0.045, 0.22, fore);
-      box(0.012, 0.012, 0.13, 0.004, glow, 0, 0.057, 0.22, fore);
-      for (let k = 0; k < 3; k++) box(0.07, 0.006, 0.008, 0.002, glove, 0, 0.0, 0.17 + k * 0.03, fore).position.y = -0.041;
-      box(0.086, 0.086, 0.03, 0.012, trim, 0, 0, 0.115, fore);                 // wrist cuff
-      box(0.09, 0.09, 0.02, 0.008, sleeveDark, 0, 0, 0.32, fore);              // elbow-side cuff
+      // Bracer: a tapered shell (same build as the third-person agents), top plate, glow strip, vents.
+      // Lofts run along their local Y, so each is turned to lie along the forearm (+Z); their local -Z ends up on top.
+      const L = (rings, mat, o) => { const m = new THREE.Mesh(loft(rings, o), mat); m.rotation.x = Math.PI / 2; fore.add(m); return m; };
+      const brc = [[0.118, 0.036, 0.035], [0.15, 0.042, 0.041], [0.24, 0.047, 0.046], [0.3, 0.046, 0.045], [0.318, 0.043, 0.042]];
+      L(brc, sleeve, { n: 2.5, seg: 22 });
+      L(grow(band(brc, 0.16, 0.29), 0.004, 0.006, -0.002), sleeveDark, { n: 2.5, seg: 16, arc: [0.64, 0.86], t: 0.008 });
+      box(0.009, 0.009, 0.11, 0.0045, glow, 0, 0.056, 0.225, fore);
+      for (let k = 0; k < 3; k++) box(0.05, 0.005, 0.008, 0.0025, glove, 0, -0.047, 0.19 + k * 0.03, fore);
+      L([[0.098, 0.04, 0.04], [0.122, 0.038, 0.038]], trim, { n: 2.4, seg: 20, b: 0.004 });                       // wrist cuff
+      L([[0.312, 0.049, 0.048], [0.33, 0.047, 0.046]], sleeveDark, { n: 2.5, seg: 20, b: 0.004 });               // elbow-side cuff
       // Gloved hand: palm, back-of-hand plate, four curled fingers, thumb
-      box(0.072, 0.052, 0.078, 0.016, glove, 0, 0, 0.0, fore);
+      const palm = new THREE.Mesh(pod(0.036, 0.026, 0.04, { n: 3, nv: 3, seg: 20 }), glove); fore.add(palm);
       box(0.06, 0.012, 0.05, 0.005, trim, 0, 0.03, 0.006, fore);               // knuckle plate
       for (let f = 0; f < 4; f++) {
         const x = -0.027 + f * 0.018, len = f === 0 || f === 3 ? 0.03 : 0.036;

@@ -87,6 +87,111 @@ function mesh(geo, mat, x = 0, y = 0, z = 0, parent) {
   return m;
 }
 
+// Sculpted building blocks for the agents. A loft sweeps a superellipse cross-section (n = 2 is round, higher is
+// squarer) through rings of [y, halfWidth, halfDepth, zOffset], so torsos, limbs and helmets taper and curve like
+// machined shells instead of boxes. With o.arc = [from, to] (fractions of a turn, 0.25 = front, 0 = +X side) it
+// builds a curved armor plate of thickness o.t that sits on top of the limb. Closed ends get a small bevel.
+const TILE = 0.2; // world size of one armor-detail tile
+export function loft(rings, o = {}) {
+  const key = 'lo' + JSON.stringify(rings) + JSON.stringify(o);
+  if (geoCache.has(key)) return geoCache.get(key);
+  const n = o.n ?? 2.6, seg = o.seg ?? 18, e = 2 / n, arc = o.arc;
+  const a0 = arc ? arc[0] * Math.PI * 2 : 0, a1 = arc ? arc[1] * Math.PI * 2 : Math.PI * 2;
+  const full = a1 - a0 > Math.PI * 2 - 1e-6;
+  const pw = v => Math.sign(v) * Math.pow(Math.abs(v), e);
+  let rs = rings.map(r => [r[0], r[1], r[2], r[3] || 0]);
+  if (rs[rs.length - 1][0] < rs[0][0]) rs.reverse();
+  if (!arc && o.cap !== false) {
+    const b = o.b ?? 0.006, f = rs[0], l = rs[rs.length - 1];
+    if (f[1] > 0.002) rs.splice(0, 1, [f[0], 0, 0, f[3]], [f[0], f[1] - b, f[2] - b, f[3]], [f[0] + b, f[1], f[2], f[3]]);
+    if (l[1] > 0.002) rs.splice(rs.length - 1, 1, [l[0] - b, l[1], l[2], l[3]], [l[0], l[1] - b, l[2] - b, l[3]], [l[0], 0, 0, l[3]]);
+  }
+  const hMax = Math.max(...rs.map(r => r[1] + r[2]));
+  const U = Math.max(1, Math.round(Math.PI * hMax * (a1 - a0) / (Math.PI * 2) / TILE));
+  const V = Math.max(1, Math.round((rs[rs.length - 1][0] - rs[0][0]) / TILE));
+  const P = (r, t, d = 0) => [Math.max(0, r[1] - d) * pw(Math.cos(t)), r[0], Math.max(0, r[2] - d) * pw(Math.sin(t)) + r[3]];
+  const build = (pos, uv, idx) => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.setIndex(idx); g.computeVertexNormals(); return g;
+  };
+  // Surface grid over the rings; `inset` shrinks it (inner face of a plate), `flip` turns it inside out
+  const grid = (inset, flip) => {
+    const pos = [], uv = [], idx = [], R = rs.length;
+    rs.forEach((r, i) => { for (let j = 0; j <= seg; j++) { pos.push(...P(r, a0 + (a1 - a0) * j / seg, inset)); uv.push(j / seg * U, i / (R - 1) * V); } });
+    for (let i = 0; i < R - 1; i++) for (let j = 0; j < seg; j++) {
+      const a = i * (seg + 1) + j, b = a + 1, c = a + seg + 2, d = a + seg + 1;
+      if (flip) idx.push(a, b, d, b, c, d); else idx.push(a, d, b, b, d, c);
+    }
+    const g = build(pos, uv, idx);
+    if (full) { // weld the seam normals
+      const nr = g.attributes.normal;
+      for (let i = 0; i < R; i++) {
+        const p = i * (seg + 1), q = p + seg;
+        _sv.set(nr.getX(p) + nr.getX(q), nr.getY(p) + nr.getY(q), nr.getZ(p) + nr.getZ(q)).normalize();
+        nr.setXYZ(p, _sv.x, _sv.y, _sv.z); nr.setXYZ(q, _sv.x, _sv.y, _sv.z);
+      }
+    }
+    return g;
+  };
+  // Edge strip between two point lists, turned to face `dir`
+  const strip = (A, B, dir) => {
+    const pos = [...A.flat(), ...B.flat()], uv = [], idx = [], m = A.length;
+    for (let j = 0; j < m; j++) uv.push(j / (m - 1), 0);
+    for (let j = 0; j < m; j++) uv.push(j / (m - 1), 0.05);
+    for (let j = 0; j < m - 1; j++) idx.push(j, j + 1, m + j, j + 1, m + j + 1, m + j);
+    let sx = 0, sy = 0, sz = 0;
+    for (let k = 0; k < idx.length; k += 3) {
+      const [p, q, r] = [idx[k], idx[k + 1], idx[k + 2]].map(v => pos.slice(v * 3, v * 3 + 3));
+      const ux = q[0] - p[0], uy = q[1] - p[1], uz = q[2] - p[2], vx = r[0] - p[0], vy = r[1] - p[1], vz = r[2] - p[2];
+      sx += uy * vz - uz * vy; sy += uz * vx - ux * vz; sz += ux * vy - uy * vx;
+    }
+    if (sx * dir[0] + sy * dir[1] + sz * dir[2] < 0) for (let k = 0; k < idx.length; k += 3) [idx[k + 1], idx[k + 2]] = [idx[k + 2], idx[k + 1]];
+    return build(pos, uv, idx);
+  };
+  let geo;
+  if (!arc || !o.t) geo = grid(0, false);
+  else {
+    const parts = [grid(0, false), grid(o.t, true)], R = rs.length;
+    const ring = (i, d) => { const out = []; for (let j = 0; j <= seg; j++) out.push(P(rs[i], a0 + (a1 - a0) * j / seg, d)); return out; };
+    parts.push(strip(ring(0, 0), ring(0, o.t), [0, -1, 0]), strip(ring(R - 1, 0), ring(R - 1, o.t), [0, 1, 0]));
+    if (!full) {
+      const col = (t, d) => rs.map(r => P(r, t, d));
+      parts.push(strip(col(a0, 0), col(a0, o.t), [Math.sin(a0), 0, -Math.cos(a0)]), strip(col(a1, 0), col(a1, o.t), [-Math.sin(a1), 0, Math.cos(a1)]));
+    }
+    geo = mergeGeometries(parts, false);
+    parts.forEach(p => p.dispose());
+  }
+  geoCache.set(key, geo);
+  return geo;
+}
+const _sv = new THREE.Vector3();
+// Rounded pebble/block: a closed loft whose rings follow a superellipse vertically too (nv higher = flatter top and bottom)
+export function pod(hw, hh, hd, o = {}) {
+  const nv = o.nv ?? 2.6, ev = 2 / nv, R = o.rings ?? 10, rings = [];
+  for (let i = 0; i <= R; i++) {
+    const f = -Math.PI / 2 + Math.PI * i / R, c = Math.cos(f), s = Math.sin(f);
+    const k = Math.sign(c) * Math.pow(Math.abs(c), ev);
+    rings.push([+(hh * Math.sign(s) * Math.pow(Math.abs(s), ev)).toFixed(5), +(hw * k).toFixed(5), +(hd * k).toFixed(5)]);
+  }
+  return loft(rings, { n: o.n ?? 2.6, seg: o.seg ?? 16, cap: false });
+}
+// Plates that hug a core shape: take the core's rings between y0 and y1 and grow them outward
+export function band(rs, y0, y1) {
+  const at = y => { for (let i = 0; i < rs.length - 1; i++) { const [a, b] = [rs[i], rs[i + 1]]; if (y >= Math.min(a[0], b[0]) && y <= Math.max(a[0], b[0])) { const f = (y - a[0]) / (b[0] - a[0] || 1); return a.map((v, k) => (v ?? 0) + ((b[k] ?? 0) - (v ?? 0)) * f); } } return rs[y < rs[0][0] ? 0 : rs.length - 1]; };
+  return [at(y0), ...rs.filter(r => r[0] > y0 && r[0] < y1), at(y1)];
+}
+export const grow = (rs, dw, dd, dz = 0) => rs.map(([y, w, d, z = 0]) => [+y.toFixed(4), +(w + dw).toFixed(4), +(d + dd).toFixed(4), +(z + dz).toFixed(4)]);
+// Mirror a plate's arc for the other side of the body (arcs are measured from +X, 0.25 = front)
+const mirArc = (a, s) => s > 0 ? a : [0.5 - a[1], 0.5 - a[0]];
+function ell(rx, ry, rz, mat, x = 0, y = 0, z = 0, parent) {
+  if (!geoCache.has('ell')) geoCache.set('ell', new THREE.SphereGeometry(1, 18, 12));
+  const m = mesh(geoCache.get('ell'), mat, x, y, z, parent);
+  m.scale.set(rx, ry, rz);
+  return m;
+}
+
 // Procedural armor detail: every face of every plate gets an engraved panel border, corner rivets and light scratches.
 // Used as a bump + roughness map, so the plates catch light like machined metal instead of plain plastic.
 let armorDetail = null;
@@ -114,6 +219,7 @@ export function getArmorDetail() {
   }
   const t = new THREE.CanvasTexture(c);
   t.anisotropy = 4;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
   armorDetail = t;
   return t;
 }
@@ -656,130 +762,122 @@ export class CharacterModel {
     if (c.id === 'tank') B.scale.set(1.16, 1.07, 1.12);
     if (rook) B.scale.set(1.08, 1.04, 1.08);
     if (ghost) B.scale.set(0.95, 1.0, 0.95);
-    // Small-part helpers: cheaper rounded boxes, and glow strips
-    const glowBar = (w, h, d, x, y, z, parent) => mesh(rbs(w, h, d, Math.min(w, h, d) * 0.4), M.glow, x, y, z, parent);
-    const bolt = (x, y, z, parent, r = 0.011) => { const k = mesh(cyl(r, r, 0.008, 8), M.trim, x, y, z, parent); k.rotation.x = Math.PI / 2; return k; };
+    const HP = Math.PI / 2;
+    // Sculpted shells (see loft): a dark suit underneath, colored plates on top, glowing seams
+    const L = (rings, mat, parent, o = {}, x = 0, y = 0, z = 0) => mesh(loft(rings, o), mat, x, y, z, parent);
+    const P = (hw, hh, hd, mat, x, y, z, parent, o) => mesh(pod(hw, hh, hd, o), mat, x, y, z, parent);
+    const glowCap = (r, len, x, y, z, parent, axis = 'y') => { const k = mesh(caps(r, len), M.glow, x, y, z, parent); if (axis === 'x') k.rotation.z = HP; else if (axis === 'z') k.rotation.x = HP; return k; };
 
     // ---------------- Hips
     const hips = this.hips = new THREE.Group(); hips.position.y = 0.98; B.add(hips);
-    mesh(rbs(0.34, 0.18, 0.22, 0.05), M.suit, 0, 0, 0, hips);
-    mesh(rbs(0.37, 0.065, 0.25, 0.02), M.trim, 0, 0.055, 0, hips);
-    mesh(rbs(0.075, 0.05, 0.028, 0.012), M.armor, 0, 0.055, 0.132, hips);           // belt buckle
-    glowBar(0.045, 0.02, 0.012, 0, 0.055, 0.15, hips);
+    L([[-0.1, 0.1, 0.075], [-0.06, 0.15, 0.1], [0.02, 0.165, 0.11], [0.09, 0.15, 0.1]], M.suit, hips, { n: 3 });   // pelvis
+    L([[0.03, 0.173, 0.118], [0.082, 0.169, 0.115]], M.trim, hips, { n: 3, b: 0.005 });                              // belt
+    P(0.04, 0.026, 0.014, M.armor, 0, 0.056, 0.121, hips, { nv: 3, n: 3 });                                          // buckle
+    P(0.022, 0.008, 0.005, M.glow, 0, 0.056, 0.135, hips);
+    const skirt = [[0.03, 0.177, 0.122], [-0.03, 0.182, 0.13], [-0.13, 0.172, 0.14]];
     for (const s of [1, -1]) {
-      mesh(rbs(0.09, 0.11, 0.06, 0.015), M.armorDark, 0.2 * s, -0.02, 0.02, hips);   // side pouches
-      mesh(rbs(0.094, 0.025, 0.064, 0.008), M.trim, 0.2 * s, 0.03, 0.02, hips);     // pouch flap
-      mesh(rbs(0.03, 0.03, 0.012, 0.006), M.trim, 0.2 * s, -0.01, 0.055, hips);     // pouch clasp
-      mesh(rbs(0.05, 0.1, 0.12, 0.02), M.armor, 0.165 * s, -0.03, -0.03, hips);      // hip guard
-      mesh(rbs(0.075, 0.13, 0.03, 0.015), M.armor, 0.06 * s, -0.06, 0.125, hips);    // front tassets
-      mesh(rbs(0.07, 0.03, 0.03, 0.01), M.trim, 0.06 * s, -0.115, 0.13, hips);
+      L(skirt, M.armor, hips, { n: 3, arc: mirArc([0.125, 0.242], s), t: 0.012 });                                  // front tassets
+      L([[0.03, 0.178, 0.122], [-0.06, 0.19, 0.13], [-0.13, 0.184, 0.126]], M.armor, hips, { n: 3, arc: mirArc([-0.07, 0.07], s), t: 0.012 }); // hip guards
+      P(0.034, 0.042, 0.024, M.armorDark, 0.13 * s, -0.02, -0.11, hips, { nv: 3, n: 3 });                          // pouches
     }
-    mesh(rbs(0.16, 0.12, 0.05, 0.02), M.armor, 0, -0.04, 0.11, hips);                // codpiece plate
-    mesh(rbs(0.22, 0.09, 0.05, 0.02), M.armorDark, 0, -0.03, -0.12, hips);           // rear plate
+    L([[0.03, 0.177, 0.122], [-0.09, 0.173, 0.13]], M.armorDark, hips, { n: 3, arc: [0.66, 0.84], t: 0.012 });     // rear plate
 
     // ---------------- Legs
     this.legs = [];
     for (const s of [1, -1]) {
       const leg = new THREE.Group(); leg.position.set(0.11 * s, -0.03, 0); hips.add(leg);
-      mesh(sph(0.075, 14, 10), M.trim, 0, 0.0, 0, leg);                                  // hip joint
-      mesh(caps(0.085, 0.26), M.suit, 0, -0.21, 0, leg);
-      mesh(rbs(0.17, 0.22, 0.12, 0.04), M.armor, 0.01 * s, -0.2, 0.045, leg);           // thigh plate
-      mesh(rbs(0.15, 0.06, 0.13, 0.02), M.armorDark, 0.01 * s, -0.08, 0.04, leg);      // upper thigh band
-      mesh(rbs(0.05, 0.16, 0.03, 0.01), M.trim, 0.09 * s, -0.2, 0.0, leg);
-      glowBar(0.012, 0.13, 0.012, 0.03 * s, -0.2, 0.108, leg);                          // glowing thigh stripe
-      mesh(rbs(0.14, 0.06, 0.1, 0.02), M.armorDark, 0.0, -0.33, 0.04, leg);            // lower thigh guard
-      mesh(rbs(0.11, 0.11, 0.07, 0.02), M.armorDark, 0.0, -0.21, -0.075, leg);         // hamstring pad
+      mesh(sph(0.07, 14, 10), M.trim, 0, 0, 0, leg);                                                                 // hip joint
+      L([[-0.02, 0.066, 0.066], [-0.1, 0.078, 0.076], [-0.3, 0.066, 0.064], [-0.42, 0.052, 0.052]], M.suit, leg, { n: 2.2, seg: 14 });
+      L([[-0.07, 0.083, 0.08, 0.004], [-0.11, 0.092, 0.09, 0.006], [-0.22, 0.09, 0.088, 0.008], [-0.31, 0.078, 0.078, 0.006], [-0.36, 0.068, 0.068, 0.004]],
+        M.armor, leg, { n: 2.4, arc: mirArc([-0.08, 0.4], s), t: 0.014 });                                           // thigh plate
+      L([[-0.1, 0.086, 0.084], [-0.2, 0.087, 0.085], [-0.3, 0.074, 0.072]], M.armorDark, leg, { n: 2.4, arc: mirArc([0.55, 0.89], s), t: 0.01 }); // hamstring plate
+      glowCap(0.005, 0.12, 0.042 * s, -0.21, 0.09, leg);                                                              // thigh light
       const knee = new THREE.Group(); knee.position.y = -0.44; leg.add(knee);
-      mesh(sph(0.06, 12, 8), M.trim, 0, 0, 0, knee);                                     // knee joint
-      mesh(rbs(0.13, 0.12, 0.09, 0.035), M.armorDark, 0, 0, 0.07, knee);                // knee cap
-      mesh(rbs(0.09, 0.075, 0.03, 0.015), M.armor, 0, 0, 0.12, knee);                   // knee plate
-      glowBar(0.05, 0.012, 0.012, 0, 0.005, 0.138, knee);
-      mesh(caps(0.075, 0.26), M.suit, 0, -0.2, 0, knee);
-      const greave = mesh(cyl(0.075, 0.058, 0.3, 10), M.armor, 0, -0.22, 0.04, knee);   // tapered shin greave
-      greave.scale.set(1.0, 1, 0.72);
-      mesh(rbs(0.05, 0.22, 0.03, 0.01), M.armorDark, 0, -0.2, 0.108, knee);            // shin ridge
-      mesh(rbs(0.11, 0.2, 0.06, 0.02), M.armorDark, 0, -0.22, -0.065, knee);           // calf guard
-      mesh(rbs(0.15, 0.04, 0.12, 0.015), M.trim, 0, -0.39, 0.01, knee);                // ankle cuff
-      bolt(0.075 * s, -0.16, 0.0, knee).rotation.set(0, 0, Math.PI / 2);
-      // Boot
-      const foot = mesh(rbs(0.15, 0.1, 0.29, 0.035), M.trim, 0, -0.475, 0.05, knee);
-      mesh(rbs(0.155, 0.035, 0.3, 0.012), M.rubber, 0, -0.51, 0.05, knee);              // sole
-      mesh(rbs(0.145, 0.06, 0.09, 0.03), M.armor, 0, -0.475, 0.16, knee);               // toe cap
-      mesh(rbs(0.14, 0.05, 0.08, 0.02), M.armorDark, 0, -0.5, -0.09, knee);             // heel
-      glowBar(0.008, 0.02, 0.15, 0.078 * s, -0.47, 0.05, knee);                          // boot side light
-      for (let i = 0; i < 3; i++) mesh(rbs(0.157, 0.006, 0.012, 0.002), M.rubber, 0, -0.518, 0.0 + i * 0.09, knee); // tread
+      mesh(sph(0.056, 12, 8), M.trim, 0, 0, 0, knee);                                                                // knee joint
+      P(0.058, 0.06, 0.04, M.armorDark, 0, 0.005, 0.06, knee, { nv: 2.2, n: 2.4 });                                  // knee cap
+      P(0.036, 0.034, 0.016, M.armor, 0, 0.01, 0.098, knee, { nv: 2.6, n: 2.6 });
+      L([[-0.02, 0.058, 0.058], [-0.12, 0.066, 0.066], [-0.3, 0.052, 0.052], [-0.42, 0.046, 0.046]], M.suit, knee, { n: 2.2, seg: 14 });
+      L([[-0.07, 0.068, 0.07, 0.006], [-0.13, 0.076, 0.078, 0.008], [-0.26, 0.068, 0.07, 0.008], [-0.36, 0.058, 0.06, 0.006], [-0.395, 0.056, 0.058, 0.004]],
+        M.armor, knee, { n: 2.5, arc: [-0.05, 0.55], t: 0.013 });                                                     // greave
+      L([[-0.08, 0.07, 0.074], [-0.16, 0.074, 0.08], [-0.3, 0.06, 0.062]], M.armorDark, knee, { n: 2.4, arc: [0.6, 0.9], t: 0.01 }); // calf plate
+      glowCap(0.0045, 0.13, 0, -0.22, 0.083, knee);                                                                  // shin light
+      L([[-0.395, 0.059, 0.061], [-0.42, 0.056, 0.058]], M.trim, knee, { n: 2.4, b: 0.004 });                          // ankle band
+      // Boot, lofted heel to toe (local Y runs backwards along the foot, local Z is up)
+      const bootR = (zs) => zs.map(([z, w, h, y]) => [-z, w, h, y]);
+      const foot = L(bootR([[-0.095, 0.05, 0.04, 0.005], [-0.08, 0.064, 0.05, 0.005], [0.0, 0.074, 0.056, 0.0], [0.09, 0.072, 0.046, -0.01], [0.16, 0.064, 0.036, -0.02], [0.2, 0.05, 0.026, -0.028]]),
+        M.trim, knee, { n: 2.6, b: 0.01 }, 0, -0.47, 0.05);
+      foot.rotation.x = -HP;
+      L(bootR([[-0.1, 0.056, 0.012, 0], [-0.085, 0.07, 0.013, 0], [0.1, 0.076, 0.013, 0], [0.19, 0.062, 0.012, 0], [0.215, 0.04, 0.01, 0]]),
+        M.rubber, knee, { n: 4, b: 0.005 }, 0, -0.515, 0.05).rotation.x = -HP;                                         // sole
+      L(bootR([[0.07, 0.078, 0.054, -0.006], [0.14, 0.07, 0.044, -0.016], [0.19, 0.058, 0.034, -0.024], [0.205, 0.05, 0.028, -0.028]]),
+        M.armor, knee, { n: 2.6, arc: [0.02, 0.48], t: 0.01 }, 0, -0.47, 0.05).rotation.x = -HP;                      // toe cap
+      P(0.054, 0.034, 0.03, M.armorDark, 0, -0.49, -0.035, knee, { nv: 2.6, n: 2.6 });                              // heel
+      glowCap(0.005, 0.08, 0.075 * s, -0.48, 0.06, knee, 'z');                                                      // boot light
       this.legs.push({ leg, knee, foot, side: s });
     }
 
     // ---------------- Spine / abdomen
     const spine = this.spine = new THREE.Group(); spine.position.y = 0.08; hips.add(spine);
-    mesh(rbs(0.3, 0.2, 0.2, 0.06), M.suit, 0, 0.1, 0, spine);
-    for (let i = 0; i < 3; i++) mesh(rbs(0.26, 0.045, 0.05, 0.015), M.armorDark, 0, 0.04 + i * 0.055, 0.1, spine);
-    for (let i = 0; i < 3; i++) glowBar(0.2, 0.006, 0.006, 0, 0.065 + i * 0.055, 0.128, spine);
-    for (const s of [1, -1]) mesh(rbs(0.05, 0.16, 0.16, 0.02), M.armorDark, 0.15 * s, 0.1, 0, spine); // oblique plates
-    mesh(rbs(0.16, 0.16, 0.04, 0.02), M.armorDark, 0, 0.1, -0.11, spine);                            // lower back plate
-
-    // ---------------- Chest
-    const chest = this.chest = new THREE.Group(); chest.position.y = 0.2; spine.add(chest);
-    mesh(rbs(0.42, 0.34, 0.26, 0.08), M.suit, 0, 0.17, 0, chest);
-    for (const s of [1, -1]) mesh(rbs(0.215, 0.27, 0.13, 0.05), M.armor, 0.11 * s, 0.2, 0.09, chest);    // split pec plates
-    mesh(rbs(0.05, 0.27, 0.13, 0.02), M.armorDark, 0, 0.2, 0.095, chest);                            // sternum ridge
-    mesh(rbs(0.36, 0.1, 0.03, 0.015), M.armorDark, 0, 0.1, 0.155, chest);
-    for (const s of [1, -1]) glowBar(0.006, 0.2, 0.006, 0.026 * s, 0.22, 0.164, chest);
-    glowBar(0.18, 0.022, 0.012, 0, 0.26, 0.16, chest);
-    for (let i = 0; i < 3; i++) mesh(rbs(0.09, 0.008, 0.01, 0.003), M.rubber, 0.11, 0.12 + i * 0.02, 0.163, chest); // vents
-    for (let i = 0; i < 3; i++) mesh(rbs(0.09, 0.008, 0.01, 0.003), M.rubber, -0.11, 0.12 + i * 0.02, 0.163, chest);
-    mesh(rbs(0.25, 0.07, 0.21, 0.03), M.trim, 0, 0.36, -0.01, chest);                                    // collar
-    mesh(rbs(0.3, 0.04, 0.26, 0.015), M.armorDark, 0, 0.335, 0.0, chest);                              // gorget
-    for (const s of [1, -1]) {
-      mesh(rbs(0.05, 0.3, 0.03, 0.01), M.rubber, 0.1 * s, 0.2, 0.152, chest);                          // harness straps
-      mesh(rbs(0.06, 0.06, 0.03, 0.01), M.trim, 0.1 * s, 0.14, 0.16, chest);
-      bolt(0.19 * s, 0.24, 0.15, chest, 0.009);
+    L([[-0.03, 0.125, 0.09], [0.05, 0.13, 0.092], [0.14, 0.14, 0.095], [0.22, 0.15, 0.1]], M.suit, spine, { n: 2.8 });
+    for (let i = 0; i < 3; i++) {
+      const y0 = 0.02 + i * 0.055, w = 0.134 + i * 0.004, d = 0.1 + i * 0.002;
+      L([[y0, w, d, 0.004], [y0 + 0.045, w + 0.004, d + 0.003, 0.004]], M.armorDark, spine, { n: 2.8, arc: [0.07, 0.43], t: 0.012 }); // ab plates
+      if (i < 2) L([[y0 + 0.048, w + 0.002, d + 0.003, 0.004], [y0 + 0.053, w + 0.003, d + 0.003, 0.004]], M.glow, spine, { n: 2.8, arc: [0.12, 0.38], t: 0.004 });
     }
+    for (const s of [1, -1]) L([[0.03, 0.142, 0.1], [0.17, 0.15, 0.104]], M.armorDark, spine, { n: 2.8, arc: mirArc([-0.08, 0.055], s), t: 0.01 }); // obliques
+    L([[0.02, 0.134, 0.098], [0.17, 0.146, 0.104]], M.armorDark, spine, { n: 2.8, arc: [0.63, 0.87], t: 0.012 });  // lower back
+
+    // ---------------- Chest: tapered torso (broad shoulders, narrow waist) under a one-piece breastplate
+    const chest = this.chest = new THREE.Group(); chest.position.y = 0.2; spine.add(chest);
+    const torso = [[-0.02, 0.15, 0.1], [0.06, 0.17, 0.112], [0.16, 0.2, 0.125], [0.26, 0.212, 0.128], [0.32, 0.198, 0.12], [0.36, 0.15, 0.1], [0.385, 0.085, 0.075]];
+    L(torso, M.suit, chest, { n: 3, seg: 22 });
+    L(grow(band(torso, 0.075, 0.35), 0.006, 0.012, 0.008), M.armor, chest, { n: 3, seg: 22, arc: [0.0, 0.5], t: 0.018 });   // breastplate
+    L(grow(band(torso, -0.01, 0.07), 0.005, 0.008, 0.004), M.armorDark, chest, { n: 3, arc: [0.06, 0.44], t: 0.012 });     // lower ribs
+    L(grow(band(torso, 0.06, 0.33), 0.006, 0.01), M.armorDark, chest, { n: 3, arc: [0.55, 0.95], t: 0.014 });              // back plate
+    P(0.018, 0.1, 0.014, M.armorDark, 0, 0.21, 0.146, chest, { nv: 3, n: 3 });                                    // sternum ridge
+    glowCap(0.004, 0.13, 0, 0.21, 0.16, chest);
+    L([[0.262, 0.219, 0.139, 0.014], [0.272, 0.218, 0.138, 0.014]], M.glow, chest, { n: 3, arc: [0.16, 0.34], t: 0.004 }); // chest light
+    for (const s of [1, -1]) for (let i = 0; i < 3; i++) P(0.034, 0.004, 0.006, M.rubber, 0.105 * s, 0.13 + i * 0.022, 0.135 - i * 0.002, chest); // vents
+    L([[0.34, 0.14, 0.105], [0.37, 0.125, 0.095], [0.395, 0.1, 0.08]], M.trim, chest, { n: 2.6, b: 0.005 });      // collar
     // Back pack
     const pack = new THREE.Group(); pack.position.set(0, 0.17, -0.19); chest.add(pack);
-    mesh(rbs(0.32, 0.34, 0.13, 0.04), M.trim, 0, 0, 0, pack);
-    mesh(rbs(0.26, 0.2, 0.04, 0.02), M.armorDark, 0, 0.02, -0.07, pack);
-    glowBar(0.2, 0.02, 0.01, 0, -0.1, -0.09, pack);
-    for (let i = 0; i < 4; i++) mesh(rbs(0.2, 0.008, 0.01, 0.003), M.rubber, 0, 0.06 + i * 0.022, -0.093, pack);
-    for (const s of [1, -1]) { mesh(rbs(0.03, 0.03, 0.05, 0.01), M.rubber, 0.13 * s, 0.14, -0.09, pack); bolt(0.15 * s, 0.0, 0.0, pack).rotation.set(0, 0, Math.PI / 2); }
+    L([[-0.17, 0.12, 0.05], [-0.14, 0.15, 0.064], [0.11, 0.155, 0.064], [0.16, 0.13, 0.056], [0.18, 0.09, 0.044]], M.trim, pack, { n: 4, b: 0.01 });
+    P(0.11, 0.1, 0.018, M.armorDark, 0, 0.02, -0.058, pack, { nv: 4, n: 4 });
+    glowCap(0.007, 0.15, 0, -0.11, -0.062, pack, 'x');
+    for (let i = 0; i < 4; i++) glowCap(0.004, 0.14, 0, 0.0 + i * 0.024, -0.077, pack, 'x').material = M.rubber;
+    for (const s of [1, -1]) mesh(caps(0.026, 0.05), M.rubber, 0.14 * s, 0.12, -0.03, pack);
 
     // ---------------- Head
     const neck = this.neck = new THREE.Group(); neck.position.y = 0.38; chest.add(neck);
-    mesh(cyl(0.065, 0.075, 0.08), M.suit, 0, 0.02, 0, neck);
-    for (let i = 0; i < 2; i++) mesh(tor(0.068, 0.008), M.rubber, 0, 0.0 + i * 0.03, 0, neck).rotation.x = Math.PI / 2; // neck rings
+    mesh(cyl(0.062, 0.072, 0.08), M.suit, 0, 0.02, 0, neck);
+    for (let i = 0; i < 2; i++) mesh(tor(0.066, 0.008), M.rubber, 0, i * 0.03, 0, neck).rotation.x = HP;
     const head = this.head = new THREE.Group(); head.position.y = 0.13; neck.add(head);
 
     // ---------------- Arms (pauldrons fixed on chest, arms driven by IK)
     this.arms = [];
     for (const s of [1, -1]) {
-      const pw = tank ? 0.22 : 0.16;
-      const px = (0.29 + (tank ? 0.02 : 0)) * s;
-      const pad = mesh(rbs(pw, 0.13, tank ? 0.24 : 0.19, 0.05), M.armor, px, 0.33, 0, chest);
-      pad.rotation.z = -0.25 * s;
-      const cap = mesh(rbs(pw * 0.8, 0.05, tank ? 0.22 : 0.17, 0.02), M.armorDark, px + 0.012 * s, 0.4 - 0.005, 0, chest); // upper layered plate
-      cap.rotation.z = -0.25 * s;
-      const rimG = glowBar(0.008, 0.012, tank ? 0.2 : 0.15, px + 0.07 * s * (pw / 0.16), 0.315, 0, chest);
-      rimG.rotation.z = -0.25 * s;
+      const padG = new THREE.Group(); padG.position.set((0.29 + (tank ? 0.02 : 0)) * s, 0.315, 0); padG.rotation.z = -0.22 * s; chest.add(padG);
+      if (tank) padG.scale.set(1.3, 1.1, 1.2);
+      L([[-0.075, 0.095, 0.105], [-0.03, 0.104, 0.114], [0.02, 0.098, 0.108], [0.055, 0.075, 0.084], [0.075, 0.04, 0.046], [0.082, 0, 0]], M.armor, padG, { n: 2.6, arc: [0, 1], t: 0.014 }); // pauldron
+      L([[0.03, 0.1, 0.11], [0.058, 0.08, 0.088], [0.078, 0.045, 0.05], [0.086, 0, 0]], M.armorDark, padG, { n: 2.6, arc: [0, 1], t: 0.008 }, 0.008 * s, 0, 0);
+      L([[-0.068, 0.1, 0.11], [-0.06, 0.101, 0.111]], M.glow, padG, { n: 2.6, b: 0.002 });                       // glowing rim
       const shoulder = new THREE.Group(); shoulder.position.set(0.25 * s, 0.28, 0); chest.add(shoulder);
-      mesh(sph(0.07, 12, 8), M.trim, 0, 0, 0, shoulder);
-      mesh(caps(0.065, 0.16), M.suit, 0, -0.14, 0, shoulder);
-      mesh(rbs(0.13, 0.12, 0.13, 0.04), M.armorDark, 0, -0.13, 0, shoulder);            // bicep guard
-      mesh(rbs(0.06, 0.07, 0.02, 0.01), M.armor, 0, -0.13, 0.072, shoulder);
+      mesh(sph(0.068, 12, 8), M.trim, 0, 0, 0, shoulder);
+      mesh(caps(0.058, 0.16), M.suit, 0, -0.14, 0, shoulder);
+      L([[-0.05, 0.058, 0.06], [-0.09, 0.07, 0.072], [-0.17, 0.068, 0.07], [-0.21, 0.058, 0.06]], M.armorDark, shoulder, { n: 2.4, seg: 14 }); // bicep
+      L([[-0.07, 0.075, 0.077], [-0.17, 0.074, 0.076], [-0.2, 0.066, 0.068]], M.armor, shoulder, { n: 2.4, arc: mirArc([-0.14, 0.14], s), t: 0.01 });
       const elbow = new THREE.Group(); elbow.position.y = -0.28; shoulder.add(elbow);
-      mesh(sph(0.062), M.trim, 0, 0, 0, elbow);
-      mesh(rbs(0.09, 0.07, 0.04, 0.02), M.armorDark, 0, 0.0, -0.06, elbow);            // elbow guard
-      mesh(caps(0.058, 0.15), M.suit, 0, -0.12, 0, elbow);
-      mesh(rbs(0.12, 0.16, 0.12, 0.035), M.armor, 0, -0.12, 0, elbow);                  // bracer
-      glowBar(0.012, 0.1, 0.008, 0.0, -0.12, 0.062, elbow);
-      for (let i = 0; i < 3; i++) mesh(rbs(0.09, 0.006, 0.01, 0.002), M.rubber, 0, -0.07 - i * 0.03, -0.062, elbow);
-      mesh(rbs(0.095, 0.03, 0.095, 0.012), M.trim, 0, -0.215, 0, elbow);              // wrist cuff
-      // Gloved hand: palm, four fingers, thumb, knuckle plate
-      const palm = mesh(rbs(0.075, 0.05, 0.085, 0.015), M.rubber, 0, -0.275, 0.005, elbow);
-      for (let i = 0; i < 4; i++) mesh(rbs(0.016, 0.055, 0.02, 0.008), M.rubber, (-0.027 + i * 0.018), -0.32, 0.02, elbow);
-      mesh(rbs(0.02, 0.05, 0.022, 0.008), M.rubber, 0.045 * -s, -0.28, 0.02, elbow).rotation.z = 0.5 * s;   // thumb
-      mesh(rbs(0.07, 0.014, 0.05, 0.006), M.trim, 0, -0.29, 0.05, elbow);              // knuckle plate
-      void palm;
+      mesh(sph(0.058, 12, 8), M.trim, 0, 0, 0, elbow);
+      P(0.045, 0.04, 0.026, M.armorDark, 0, 0, -0.056, elbow, { nv: 2.6 });                                          // elbow guard
+      mesh(caps(0.05, 0.15), M.suit, 0, -0.12, 0, elbow);
+      L([[-0.035, 0.058, 0.058], [-0.06, 0.068, 0.068], [-0.13, 0.064, 0.062], [-0.195, 0.052, 0.05]], M.armor, elbow, { n: 2.5, seg: 14 }); // bracer
+      glowCap(0.0045, 0.09, 0, -0.115, 0.064, elbow);
+      L([[-0.198, 0.05, 0.05], [-0.222, 0.047, 0.047]], M.trim, elbow, { n: 2.4, b: 0.004 });                        // wrist ring
+      // Gloved hand: rounded palm, capsule fingers and thumb, knuckle guard
+      P(0.037, 0.03, 0.042, M.rubber, 0, -0.262, 0.005, elbow, { nv: 3, n: 3 });
+      for (let i = 0; i < 4; i++) { const f = mesh(caps(0.009, 0.028), M.rubber, -0.027 + i * 0.018, -0.305, 0.022, elbow); f.rotation.x = -0.25; }
+      const th = mesh(caps(0.011, 0.028), M.rubber, 0.04 * -s, -0.28, 0.022, elbow); th.rotation.set(-0.3, 0, 0.6 * s);
+      P(0.035, 0.008, 0.024, M.trim, 0, -0.28, 0.042, elbow, { nv: 3, n: 3 });
       this.arms.push({ shoulder, elbow, side: s });
     }
 
@@ -811,71 +909,65 @@ export class CharacterModel {
     for (const mat of this.allMats) { mat.userData.baseEmissive = mat.emissiveIntensity ?? 0; if (mat.emissive) mat.userData.baseColor = mat.emissive.clone(); }
   }
 
-  // Parts every agent's helmet shares: jaw guard, ear pods, top vents. Ghost wears a hood instead.
-  _headBase(head) {
-    const M = this.mats, id = this.char.id;
-    if (id !== 'ghost') {
-      mesh(rbs(0.19, 0.07, 0.15, 0.03), M.armorDark, 0, -0.1, 0.045, head);                 // jaw guard
-      mesh(rbs(0.1, 0.05, 0.04, 0.02), M.trim, 0, -0.12, 0.125, head);                       // chin
-      for (let i = 0; i < 3; i++) mesh(rbs(0.012, 0.03, 0.008, 0.003), M.rubber, -0.03 + i * 0.03, -0.1, 0.132, head); // mouth vents
-      for (const s of [1, -1]) {
-        mesh(cyl(0.05, 0.05, 0.05, 14), M.trim, 0.148 * s, -0.01, -0.005, head).rotation.z = Math.PI / 2;          // ear pods
-        mesh(cyl(0.036, 0.036, 0.054, 14), M.armorDark, 0.15 * s, -0.01, -0.005, head).rotation.z = Math.PI / 2;
-        mesh(rbs(0.012, 0.05, 0.05, 0.004), M.glow, 0.176 * s, -0.01, -0.005, head);
-      }
+  // Helmet shell shared by most agents: a lofted dome (k scales it, n sets how square it is), a wraparound visor,
+  // a brow plate, chin guard and ear pods. Returns nothing; agent-specific parts go on top.
+  _helmet(head, { k = [1, 1, 1], n = 2.5, visor = true, brow = true, mat } = {}) {
+    const M = this.mats, HP = Math.PI / 2, [kx, ky, kz] = k;
+    const R = (rs) => rs.map(([y, w, d, z = 0]) => [+(y * ky).toFixed(4), +(w * kx).toFixed(4), +(d * kz).toFixed(4), +(z * kz).toFixed(4)]);
+    mesh(loft(R([[-0.12, 0.085, 0.09], [-0.09, 0.118, 0.128, 0.004], [-0.02, 0.138, 0.15, 0.004], [0.06, 0.14, 0.152], [0.12, 0.122, 0.134, -0.006], [0.16, 0.085, 0.096, -0.01], [0.182, 0.035, 0.04, -0.012], [0.186, 0, 0, -0.012]]),
+      { n, seg: 24 }), mat || M.armor, 0, 0, 0, head);
+    if (visor) {
+      mesh(loft(R([[-0.035, 0.143, 0.158, 0.004], [0.045, 0.145, 0.158, 0.002]]), { n, seg: 20, arc: [0.1, 0.4], t: 0.012 }), M.visor, 0, 0, 0, head);
+      mesh(loft(R([[0.002, 0.147, 0.161, 0.004], [0.009, 0.147, 0.161, 0.004]]), { n, seg: 16, arc: [0.15, 0.35], t: 0.004 }), M.glow, 0, 0, 0, head);
+    }
+    if (brow) mesh(loft(R([[0.045, 0.147, 0.16, 0.002], [0.078, 0.143, 0.155, -0.001]]), { n, seg: 20, arc: [0.08, 0.42], t: 0.012 }), M.armorDark, 0, 0, 0, head);
+    mesh(pod(0.062 * kx, 0.034, 0.034), M.armorDark, 0, -0.1 * ky, 0.104 * kz, head);                              // chin guard
+    for (let i = 0; i < 3; i++) mesh(caps(0.005, 0.016), M.rubber, -0.026 + i * 0.026, -0.1 * ky, 0.139 * kz, head);
+    for (const s of [1, -1]) {                                                                                     // ear pods
+      const x = 0.14 * kx;
+      mesh(cyl(0.048, 0.048, 0.04, 18), M.trim, (x + 0.01) * s, -0.01, -0.005, head).rotation.z = HP;
+      mesh(cyl(0.034, 0.034, 0.046, 18), M.armorDark, (x + 0.012) * s, -0.01, -0.005, head).rotation.z = HP;
+      mesh(cyl(0.024, 0.024, 0.01, 16), M.glow, (x + 0.034) * s, -0.01, -0.005, head).rotation.z = HP;
     }
   }
 
   _buildHead(head, neck, chest, pack) {
-    const M = this.mats, id = this.char.id;
-    const glowBar = (w, h, d, x, y, z, parent) => mesh(rbs(w, h, d, Math.min(w, h, d) * 0.4), M.glow, x, y, z, parent);
-    this._headBase(head);
+    const M = this.mats, id = this.char.id, HP = Math.PI / 2;
+    const glowCap = (r, len, x, y, z, parent, axis = 'y') => { const k = mesh(caps(r, len), M.glow, x, y, z, parent); if (axis === 'x') k.rotation.z = HP; else if (axis === 'z') k.rotation.x = HP; return k; };
+    const P = (hw, hh, hd, mat, x, y, z, parent, o) => mesh(pod(hw, hh, hd, o), mat, x, y, z, parent);
     if (id === 'blaze') {
-      mesh(sph(0.15), M.armor, 0, 0.02, 0, head).scale.set(1, 1.05, 1.12);
-      mesh(rbs(0.24, 0.075, 0.1, 0.035), M.visor, 0, 0.01, 0.11, head);
-      mesh(rbs(0.26, 0.012, 0.11, 0.005), M.armorDark, 0, 0.056, 0.115, head);              // visor brow
-      mesh(rbs(0.012, 0.075, 0.09, 0.004), M.armorDark, 0.122, 0.01, 0.112, head);           // visor side frame
-      mesh(rbs(0.012, 0.075, 0.09, 0.004), M.armorDark, -0.122, 0.01, 0.112, head);
-      mesh(rbs(0.22, 0.012, 0.02, 0.005), M.glow, 0, 0.01, 0.16, head);
-      const fin = mesh(rbs(0.03, 0.09, 0.26, 0.012), M.armorDark, 0, 0.15, -0.04, head);
-      fin.rotation.x = -0.35;
-      mesh(rbs(0.035, 0.02, 0.22, 0.008), M.glow, 0, 0.19, -0.06, head).rotation.x = -0.35;
-      for (const s of [1, -1]) mesh(rbs(0.03, 0.08, 0.14, 0.012), M.trim, 0.15 * s, -0.01, -0.01, head);
-      for (const s of [1, -1]) { const h2 = mesh(rbs(0.02, 0.05, 0.12, 0.006), M.armorDark, 0.05 * s, 0.155, -0.02, head); h2.rotation.set(-0.3, 0, 0.3 * s); } // secondary crest
+      this._helmet(head);
+      const fin = P(0.014, 0.07, 0.12, M.armorDark, 0, 0.17, -0.03, head, { nv: 2.4, n: 2.4 }); fin.rotation.x = -0.35; // crest
+      const fe = glowCap(0.004, 0.2, 0, 0.214, -0.05, head); fe.rotation.x = HP - 0.35;
+      for (const s of [1, -1]) { const h2 = P(0.01, 0.036, 0.065, M.armorDark, 0.052 * s, 0.16, -0.02, head, { nv: 2.4 }); h2.rotation.set(-0.3, 0, 0.3 * s); }
       // Twin thrusters
       for (const s of [1, -1]) {
-        const j = mesh(cyl(0.045, 0.06, 0.2), M.trim, 0.1 * s, -0.08, -0.08, pack);
-        mesh(cyl(0.042, 0.042, 0.01), M.glow, 0.1 * s, -0.185, -0.08, pack);
-        mesh(tor(0.052, 0.008), M.armor, 0.1 * s, -0.16, -0.08, pack).rotation.x = Math.PI / 2 + 0.15;
-        mesh(cyl(0.05, 0.05, 0.03), M.armorDark, 0.1 * s, 0.03, -0.08, pack);
-        j.rotation.x = 0.15;
+        const j = mesh(cyl(0.045, 0.06, 0.2, 18), M.trim, 0.1 * s, -0.08, -0.08, pack); j.rotation.x = 0.15;
+        mesh(cyl(0.042, 0.042, 0.01, 18), M.glow, 0.1 * s, -0.185, -0.064, pack).rotation.x = 0.15;
+        mesh(tor(0.054, 0.008), M.armor, 0.1 * s, -0.155, -0.068, pack).rotation.x = HP + 0.15;
+        mesh(cyl(0.05, 0.05, 0.03, 18), M.armorDark, 0.1 * s, 0.03, -0.096, pack).rotation.x = 0.15;
       }
     } else if (id === 'tank') {
-      mesh(rbs(0.3, 0.29, 0.31, 0.08), M.armor, 0, 0.02, 0.0, head);
-      mesh(rbs(0.32, 0.12, 0.2, 0.04), M.armorDark, 0, -0.08, 0.04, head);
-      mesh(rbs(0.24, 0.035, 0.03, 0.012), M.glow, 0, 0.04, 0.155, head);
-      mesh(rbs(0.26, 0.07, 0.03, 0.012), M.armorDark, 0, 0.04, 0.16, head);                  // visor slit frame
-      mesh(rbs(0.2, 0.05, 0.25, 0.02), M.trim, 0, 0.17, -0.02, head);
-      for (let i = 0; i < 3; i++) mesh(rbs(0.03, 0.04, 0.02, 0.008), M.trim, -0.06 + i * 0.06, -0.09, 0.15, head);
-      for (const s of [1, -1]) mesh(rbs(0.04, 0.16, 0.2, 0.012), M.armorDark, 0.16 * s, 0.02, 0.0, head);   // cheek plates
-      mesh(rbs(0.05, 0.03, 0.25, 0.01), M.armorDark, 0, 0.2, -0.02, head);                   // crest
+      this._helmet(head, { k: [1.12, 1.0, 1.06], n: 3.2, visor: false, brow: false });
+      mesh(loft([[-0.02, 0.162, 0.168, 0.004], [0.075, 0.16, 0.166, 0.0]], { n: 3.2, seg: 22, arc: [0.08, 0.42], t: 0.014 }), M.armorDark, 0, 0, 0, head); // visor frame
+      mesh(loft([[0.02, 0.166, 0.172, 0.004], [0.036, 0.166, 0.172, 0.004]], { n: 3.2, seg: 18, arc: [0.14, 0.36], t: 0.006 }), M.glow, 0, 0, 0, head);    // visor slit
+      P(0.12, 0.05, 0.08, M.armorDark, 0, -0.085, 0.05, head, { nv: 3, n: 3 });                                    // jaw block
+      P(0.028, 0.03, 0.13, M.trim, 0, 0.19, -0.02, head, { nv: 2.6 });                                             // crest
+      for (let i = 0; i < 3; i++) mesh(caps(0.009, 0.02), M.trim, -0.05 + i * 0.05, -0.09, 0.134, head);
       // Generator on the back
-      mesh(cyl(0.09, 0.09, 0.3), M.armorDark, 0, 0.05, -0.1, pack);
-      mesh(tor(0.095, 0.014), M.glow, 0, 0.1, -0.1, pack).rotation.x = Math.PI / 2;
-      mesh(tor(0.095, 0.014), M.glow, 0, 0.0, -0.1, pack).rotation.x = Math.PI / 2;
-      for (const y of [0.2, -0.1]) mesh(cyl(0.1, 0.1, 0.03), M.trim, 0, y, -0.1, pack);          // generator caps
-      for (const s of [1, -1]) mesh(cyl(0.012, 0.012, 0.2), M.rubber, 0.06 * s, 0.05, -0.19, pack); // coolant lines
+      mesh(cyl(0.09, 0.09, 0.3, 20), M.armorDark, 0, 0.05, -0.1, pack);
+      for (const y of [0.1, 0.0]) mesh(tor(0.095, 0.014), M.glow, 0, y, -0.1, pack).rotation.x = HP;
+      for (const y of [0.2, -0.1]) mesh(cyl(0.1, 0.1, 0.03, 20), M.trim, 0, y, -0.1, pack);
+      for (const s of [1, -1]) mesh(cyl(0.012, 0.012, 0.2), M.rubber, 0.06 * s, 0.05, -0.19, pack);
     } else if (id === 'ghost') {
       mesh(sph(0.14), M.suit, 0, 0.0, 0, head);
       const hood = mesh(sph(0.18, 22, 16, 0, Math.PI * 2, 0, Math.PI * 0.62), M.armorDark, 0, 0.02, -0.02, head);
-      hood.rotation.x = -0.35; hood.material = M.armorDark;
-      mesh(rbs(0.2, 0.1, 0.06, 0.03), M.visor, 0, 0.0, 0.11, head);
-      mesh(rbs(0.22, 0.014, 0.07, 0.006), M.armorDark, 0, 0.055, 0.112, head);              // mask brow
-      mesh(rbs(0.13, 0.08, 0.05, 0.03), M.armorDark, 0, -0.08, 0.1, head);                  // face wrap
-      for (let i = 0; i < 3; i++) mesh(rbs(0.012, 0.03, 0.008, 0.003), M.rubber, -0.03 + i * 0.03, -0.08, 0.13, head);
-      for (const s of [1, -1]) mesh(sph(0.018, 10, 8), M.glow, 0.05 * s, 0.01, 0.145, head);
-      mesh(rbs(0.14, 0.012, 0.01, 0.004), M.glow, 0, -0.05, 0.14, head);
-      for (const s of [1, -1]) mesh(rbs(0.02, 0.09, 0.06, 0.008), M.trim, 0.14 * s, -0.02, 0.0, head).rotation.z = 0.15 * s; // hood clasps
+      hood.rotation.x = -0.35;
+      mesh(loft([[-0.04, 0.12, 0.13, 0.0], [0.035, 0.122, 0.132, 0.0]], { n: 2.4, seg: 20, arc: [0.12, 0.38], t: 0.012 }), M.visor, 0, 0, 0, head); // mask
+      P(0.07, 0.036, 0.03, M.armorDark, 0, -0.078, 0.1, head, { nv: 2.6 });                                        // face wrap
+      for (let i = 0; i < 3; i++) mesh(caps(0.005, 0.02), M.rubber, -0.03 + i * 0.03, -0.078, 0.128, head);
+      for (const s of [1, -1]) mesh(sph(0.016, 10, 8), M.glow, 0.048 * s, 0.005, 0.138, head);
+      for (const s of [1, -1]) { const cl = P(0.014, 0.05, 0.032, M.trim, 0.14 * s, -0.02, 0.0, head); cl.rotation.z = 0.15 * s; } // hood clasps
       // Cape
       const capeGeo = new THREE.PlaneGeometry(0.5, 0.95, 4, 8);
       capeGeo.translate(0, -0.475, 0);
@@ -884,117 +976,97 @@ export class CharacterModel {
       this.cape.position.set(0, 0.34, -0.27);
       chest.add(this.cape);
       this.mats.cape = this.cape.material;
-      mesh(rbs(0.4, 0.03, 0.05, 0.012), M.trim, 0, 0.35, -0.24, chest);                       // cape collar clasp
+      P(0.2, 0.016, 0.026, M.trim, 0, 0.35, -0.24, chest, { nv: 3, n: 3 });                                        // cape clasp bar
     } else if (id === 'frost') {
-      mesh(sph(0.15), M.armor, 0, 0.02, 0, head).scale.set(1, 1.08, 1.05);
-      mesh(rbs(0.23, 0.07, 0.09, 0.03), M.visor, 0, 0.0, 0.115, head);
-      mesh(rbs(0.25, 0.012, 0.1, 0.005), M.armorDark, 0, 0.05, 0.12, head);
-      mesh(rbs(0.2, 0.014, 0.02, 0.006), M.glow, 0, 0.0, 0.16, head);
+      this._helmet(head, { k: [1, 1.04, 1] });
       const ice = new THREE.MeshStandardMaterial({ color: 0xbff0ff, emissive: 0x6fd3ff, emissiveIntensity: 0.6, roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.88 });
       this.mats.ice = ice;
       const shard = (x, y, z, s2, rz, parent) => { const k = mesh(new THREE.OctahedronGeometry(s2, 0), ice, x, y, z, parent); k.scale.set(0.6, 1.6, 0.6); k.rotation.z = rz; return k; };
-      shard(0, 0.19, -0.02, 0.06, 0, head);
-      shard(0.08, 0.16, -0.02, 0.045, -0.5, head);
-      shard(-0.08, 0.16, -0.02, 0.045, 0.5, head);
-      shard(0.04, 0.17, -0.06, 0.035, -0.2, head);
-      shard(-0.04, 0.17, -0.06, 0.035, 0.2, head);
+      shard(0, 0.2, -0.02, 0.06, 0, head);
+      shard(0.08, 0.17, -0.02, 0.045, -0.5, head);
+      shard(-0.08, 0.17, -0.02, 0.045, 0.5, head);
+      shard(0.04, 0.18, -0.06, 0.035, -0.2, head);
+      shard(-0.04, 0.18, -0.06, 0.035, 0.2, head);
       for (const s2 of [1, -1]) { shard(0.3 * s2, 0.45, -0.02, 0.06, -0.4 * s2, chest); shard(0.24 * s2, 0.48, -0.06, 0.045, -0.2 * s2, chest); shard(0.35 * s2, 0.42, 0.04, 0.035, -0.6 * s2, chest); }
       mesh(cyl(0.07, 0.07, 0.3, 8), ice, 0, 0.02, -0.1, pack);
-      for (const y of [0.18, -0.14]) mesh(cyl(0.078, 0.078, 0.03, 8), M.trim, 0, y, -0.1, pack);  // tank clamps
+      for (const y of [0.18, -0.14]) mesh(cyl(0.078, 0.078, 0.03, 16), M.trim, 0, y, -0.1, pack);
       for (const s2 of [1, -1]) shard(0.06 * s2, 0.25, -0.1, 0.04, 0.3 * s2, pack);
     } else if (id === 'nova') {
-      mesh(sph(0.145), M.armor, 0, 0.01, 0, head).scale.set(1, 1.02, 1.08);
-      mesh(rbs(0.22, 0.08, 0.09, 0.035), M.visor, 0, 0.0, 0.105, head);
-      mesh(rbs(0.24, 0.012, 0.1, 0.005), M.armorDark, 0, 0.052, 0.11, head);
-      // Medical cross on forehead and pack
-      mesh(rbs(0.07, 0.02, 0.01, 0.004), M.glow, 0, 0.1, 0.14, head);
-      mesh(rbs(0.02, 0.07, 0.01, 0.004), M.glow, 0, 0.1, 0.14, head);
-      const halo = mesh(tor(0.17, 0.01), M.glow, 0, 0.24, -0.02, head); halo.rotation.x = Math.PI / 2 - 0.25;
-      for (const s of [1, -1]) mesh(rbs(0.012, 0.05, 0.012, 0.004), M.trim, 0.1 * s, 0.2, -0.02, head);   // halo struts
-      mesh(rbs(0.14, 0.04, 0.02, 0.008), M.glow, 0, 0.02, -0.075, pack);
-      mesh(rbs(0.04, 0.14, 0.02, 0.008), M.glow, 0, 0.02, -0.075, pack);
+      this._helmet(head, { k: [0.98, 0.98, 1] });
+      glowCap(0.007, 0.036, 0, 0.1, 0.148, head, 'x');                                                             // medical cross
+      glowCap(0.007, 0.036, 0, 0.1, 0.148, head);
+      const halo = mesh(tor(0.17, 0.01), M.glow, 0, 0.25, -0.02, head); halo.rotation.x = HP - 0.25;
+      for (const s of [1, -1]) mesh(caps(0.006, 0.05), M.trim, 0.1 * s, 0.2, -0.02, head);
+      P(0.07, 0.02, 0.01, M.glow, 0, 0.02, -0.072, pack);
+      P(0.02, 0.07, 0.01, M.glow, 0, 0.02, -0.072, pack);
       for (const s2 of [1, -1]) {
-        mesh(cyl(0.035, 0.035, 0.26, 10), M.armorDark, 0.13 * s2, 0.0, -0.02, pack);
-        for (const y of [0.11, -0.11]) mesh(cyl(0.04, 0.04, 0.025, 10), M.trim, 0.13 * s2, y, -0.02, pack);  // canister caps
-        mesh(rbs(0.012, 0.16, 0.012, 0.004), M.glow, 0.13 * s2, 0.0, 0.017, pack);
+        mesh(cyl(0.035, 0.035, 0.26, 16), M.armorDark, 0.13 * s2, 0.0, -0.02, pack);
+        for (const y of [0.11, -0.11]) mesh(cyl(0.04, 0.04, 0.025, 16), M.trim, 0.13 * s2, y, -0.02, pack);
+        glowCap(0.006, 0.15, 0.13 * s2, 0.0, 0.017, pack);
       }
     } else if (id === 'echo') {
-      mesh(sph(0.148), M.armorDark, 0, 0.01, 0, head).scale.set(1, 1.05, 1.1);
-      mesh(rbs(0.22, 0.1, 0.06, 0.04), M.armor, 0, 0.0, 0.1, head);
-      mesh(sph(0.035, 14, 10), M.glow, 0, 0.0, 0.14, head);
-      mesh(tor(0.05, 0.008), M.trim, 0, 0.0, 0.135, head);
-      mesh(tor(0.065, 0.005), M.trim, 0, 0.0, 0.132, head);
-      for (const s of [1, -1]) glowBar(0.05, 0.008, 0.008, 0.075 * s, 0.0, 0.132, head);           // sensor slits
+      this._helmet(head, { n: 2.1, visor: false, brow: false, mat: M.armorDark, k: [1, 1, 1.04] });
+      mesh(loft([[-0.075, 0.135, 0.152, 0.006], [0.055, 0.137, 0.156, 0.004]], { n: 2.1, seg: 20, arc: [0.1, 0.4], t: 0.014 }), M.armor, 0, 0, 0, head); // faceplate
+      mesh(sph(0.034, 16, 12), M.glow, 0, 0.0, 0.158, head);
+      mesh(tor(0.048, 0.007), M.trim, 0, 0.0, 0.158, head);
+      mesh(tor(0.064, 0.005), M.trim, 0, 0.0, 0.155, head);
+      for (const s of [1, -1]) glowCap(0.004, 0.028, 0.082 * s, 0.0, 0.15, head, 'x');                           // sensor slits
       mesh(cyl(0.006, 0.006, 0.26), M.trim, -0.1, 0.2, -0.04, head).rotation.z = 0.3;
       mesh(sph(0.018, 10, 8), M.glow, -0.14, 0.33, -0.04, head);
-      mesh(cyl(0.004, 0.004, 0.18), M.trim, 0.08, 0.17, -0.04, head).rotation.z = -0.25;             // second antenna
+      mesh(cyl(0.004, 0.004, 0.18), M.trim, 0.08, 0.17, -0.04, head).rotation.z = -0.25;
       // Radar dish on the back
       const dish = mesh(sph(0.12, 16, 8, 0, Math.PI * 2, 0, Math.PI * 0.35), M.trim, 0, 0.18, -0.1, pack);
-      dish.rotation.x = -Math.PI / 2 - 0.4; dish.material = M.trim;
+      dish.rotation.x = -HP - 0.4;
       mesh(sph(0.02, 10, 8), M.glow, 0, 0.2, -0.16, pack);
-      mesh(cyl(0.012, 0.012, 0.12), M.trim, 0, 0.12, -0.09, pack);                                  // dish mast
-      mesh(rbs(0.05, 0.05, 0.05, 0.01), M.armorDark, 0, 0.06, -0.09, pack);
+      mesh(cyl(0.012, 0.012, 0.12), M.trim, 0, 0.12, -0.09, pack);
+      P(0.03, 0.03, 0.03, M.armorDark, 0, 0.06, -0.09, pack);
     } else if (id === 'rift') {
-      // Sleek phase runner: swept crest, blade fins, and a glowing rift ring behind the back
-      mesh(sph(0.14), M.armor, 0, 0.02, 0, head).scale.set(0.95, 1.06, 1.12);
-      mesh(rbs(0.21, 0.055, 0.09, 0.025), M.visor, 0, 0.015, 0.108, head);
-      mesh(rbs(0.23, 0.012, 0.1, 0.005), M.armorDark, 0, 0.055, 0.112, head);
-      glowBar(0.19, 0.008, 0.012, 0, 0.015, 0.155, head);
+      // Sleek phase runner: helmet swept back into a crest, blade fins, a glowing rift ring behind the back
+      this._helmet(head, { k: [0.95, 1.04, 1.1] });
       for (const s2 of [1, -1]) {
-        const crest = mesh(rbs(0.022, 0.045, 0.3, 0.008), M.armorDark, 0.045 * s2, 0.14, -0.06, head); crest.rotation.set(-0.5, -0.12 * s2, 0);
-        const edge = glowBar(0.008, 0.008, 0.26, 0.045 * s2, 0.165, -0.06, head); edge.rotation.set(-0.5, -0.12 * s2, 0);
-        const wing = mesh(rbs(0.012, 0.11, 0.18, 0.005), M.armorDark, 0.165 * s2, 0.0, -0.05, head); wing.rotation.set(0, 0.35 * s2, 0.2 * s2);
-        const wedge = glowBar(0.008, 0.09, 0.008, 0.175 * s2, -0.005, 0.02, head); wedge.rotation.set(0, 0.35 * s2, 0.2 * s2);
+        const crest = P(0.012, 0.03, 0.14, M.armorDark, 0.045 * s2, 0.15, -0.07, head, { nv: 2.4 }); crest.rotation.set(-0.5, -0.12 * s2, 0);
+        const edge = mesh(caps(0.004, 0.22), M.glow, 0.045 * s2, 0.176, -0.07, head); edge.rotation.set(-0.5 + HP, 0, 0.12 * s2);
+        const wing = P(0.007, 0.055, 0.09, M.armorDark, 0.17 * s2, 0.0, -0.06, head, { nv: 2.4 }); wing.rotation.set(0, 0.35 * s2, 0.2 * s2);
+        const wedge = mesh(caps(0.004, 0.085), M.glow, 0.178 * s2, -0.005, 0.01, head); wedge.rotation.set(0, 0.35 * s2, 0.2 * s2);
       }
-      // Rift ring
-      const ring = mesh(tor(0.2, 0.016), M.glow, 0, 0.14, -0.12, pack);
+      mesh(tor(0.2, 0.016), M.glow, 0, 0.14, -0.12, pack);
       mesh(tor(0.14, 0.01), M.armorDark, 0, 0.14, -0.12, pack);
       mesh(sph(0.045, 14, 10), M.glow, 0, 0.14, -0.12, pack).scale.set(1, 1, 0.5);
-      for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + Math.PI / 4; mesh(rbs(0.014, 0.05, 0.02, 0.005), M.trim, Math.cos(a) * 0.2, 0.14 + Math.sin(a) * 0.2, -0.12, pack).rotation.z = a; }
-      mesh(rbs(0.06, 0.2, 0.05, 0.015), M.trim, 0, 0.0, -0.09, pack);
-      void ring;
-      // Hip scarf
-      for (const s2 of [1, -1]) mesh(rbs(0.03, 0.2, 0.012, 0.005), M.armorDark, 0.07 * s2, -0.12, -0.13, this.hips).rotation.x = 0.15;
+      for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + Math.PI / 4; P(0.008, 0.026, 0.011, M.trim, Math.cos(a) * 0.2, 0.14 + Math.sin(a) * 0.2, -0.12, pack).rotation.z = a; }
+      mesh(caps(0.03, 0.15), M.trim, 0, 0.0, -0.08, pack);
+      for (const s2 of [1, -1]) P(0.02, 0.1, 0.007, M.armorDark, 0.07 * s2, -0.12, -0.14, this.hips).rotation.x = 0.15; // hip scarf
     } else if (id === 'rook') {
-      // Fortress helm with a crenellated crown, a slit visor and a tower shield on the back
-      mesh(rbs(0.27, 0.27, 0.28, 0.06), M.armor, 0, 0.02, 0, head);
-      mesh(rbs(0.23, 0.075, 0.04, 0.012), M.armorDark, 0, 0.03, 0.14, head);
-      glowBar(0.2, 0.026, 0.012, 0, 0.03, 0.16, head);
-      mesh(rbs(0.29, 0.03, 0.3, 0.01), M.trim, 0, 0.15, 0, head);
-      for (let i = 0; i < 5; i++) mesh(rbs(0.04, 0.05, 0.05, 0.008), M.armorDark, -0.1 + i * 0.05, 0.19, 0.11, head);
-      for (let i = 0; i < 5; i++) mesh(rbs(0.04, 0.05, 0.05, 0.008), M.armorDark, -0.1 + i * 0.05, 0.19, -0.11, head);
-      for (const s2 of [1, -1]) {
-        mesh(rbs(0.04, 0.05, 0.16, 0.008), M.armorDark, 0.125 * s2, 0.19, 0, head);
-        mesh(rbs(0.03, 0.16, 0.22, 0.01), M.armorDark, 0.145 * s2, 0.0, 0.0, head);        // cheek plates
-      }
-      mesh(rbs(0.16, 0.03, 0.05, 0.01), M.trim, 0, -0.1, 0.14, head);
+      // Fortress helm: tall and square-shouldered, a crown of crenellations, a slit visor, a tower shield on the back
+      this._helmet(head, { k: [1.06, 1.08, 1.02], n: 3.8, visor: false, brow: false });
+      mesh(loft([[-0.01, 0.154, 0.162, 0.004], [0.07, 0.154, 0.162, 0.002]], { n: 3.8, seg: 22, arc: [0.08, 0.42], t: 0.014 }), M.armorDark, 0, 0, 0, head); // visor frame
+      mesh(loft([[0.024, 0.158, 0.166, 0.004], [0.04, 0.158, 0.166, 0.004]], { n: 3.8, seg: 18, arc: [0.15, 0.35], t: 0.006 }), M.glow, 0, 0, 0, head);    // slit
+      mesh(loft([[0.14, 0.142, 0.15, -0.006], [0.16, 0.14, 0.148, -0.008]], { n: 3.8, seg: 24 }), M.trim, 0, 0, 0, head);                               // crown band
+      for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4 + Math.PI / 8; const b = P(0.026, 0.024, 0.016, M.armorDark, Math.cos(a) * 0.13, 0.19, Math.sin(a) * 0.138 - 0.008, head, { nv: 4, n: 4 }); b.rotation.y = -a + HP; }
+      for (const s2 of [1, -1]) P(0.026, 0.085, 0.085, M.armorDark, 0.155 * s2, 0.02, 0.0, head, { nv: 3, n: 3 });  // cheek plates
       // Tower shield across the back
-      mesh(rbs(0.4, 0.56, 0.05, 0.02), M.armor, 0, 0.06, -0.1, pack);
-      mesh(rbs(0.34, 0.5, 0.02, 0.015), M.armorDark, 0, 0.06, -0.13, pack);
-      for (const s2 of [1, -1]) glowBar(0.012, 0.42, 0.012, 0.1 * s2, 0.06, -0.145, pack);
-      glowBar(0.2, 0.014, 0.012, 0, 0.26, -0.145, pack);
-      mesh(rbs(0.44, 0.04, 0.06, 0.012), M.trim, 0, 0.35, -0.1, pack);
-      mesh(rbs(0.44, 0.04, 0.06, 0.012), M.trim, 0, -0.23, -0.1, pack);
+      const sh = [[-0.26, 0.12, 0.02], [-0.2, 0.19, 0.026], [0.22, 0.2, 0.026], [0.3, 0.13, 0.022]];
+      mesh(loft(sh, { n: 4, b: 0.01 }), M.armor, 0, 0.06, -0.1, pack);
+      mesh(loft(sh.map(([y, w, d]) => [y * 0.85, w * 0.82, d]), { n: 4, b: 0.008 }), M.armorDark, 0, 0.06, -0.116, pack);
+      glowCap(0.006, 0.36, 0, 0.07, -0.142, pack);
+      glowCap(0.006, 0.2, 0, 0.12, -0.142, pack, 'x');
+      P(0.03, 0.03, 0.03, M.trim, 0, 0.06, -0.08, pack);
     } else { // volt
-      mesh(sph(0.145), M.armor, 0, 0.01, 0, head).scale.set(1, 1, 1.08);
-      mesh(rbs(0.22, 0.09, 0.1, 0.04), M.visor, 0, 0.0, 0.1, head);
-      mesh(rbs(0.24, 0.012, 0.11, 0.005), M.armorDark, 0, 0.054, 0.105, head);
-      mesh(rbs(0.035, 0.035, 0.01, 0.008), M.glow, 0.06, 0.0, 0.152, head);
-      mesh(rbs(0.035, 0.035, 0.01, 0.008), M.glow, -0.06, 0.0, 0.152, head);
-      for (const s of [1, -1]) {
-        mesh(cyl(0.06, 0.06, 0.05), M.trim, 0.15 * s, 0.0, 0, head).rotation.z = Math.PI / 2;
-        mesh(cyl(0.045, 0.045, 0.052), M.glow, 0.155 * s, 0.0, 0, head).rotation.z = Math.PI / 2;
+      this._helmet(head);
+      for (const s of [1, -1]) P(0.022, 0.022, 0.008, M.glow, 0.058 * s, 0.006, 0.168, head);                    // eyes
+      for (const s of [1, -1]) {                                                                                   // ear coils
+        mesh(cyl(0.062, 0.062, 0.05, 18), M.trim, 0.156 * s, 0.0, 0, head).rotation.z = HP;
+        mesh(cyl(0.046, 0.046, 0.054, 18), M.glow, 0.16 * s, 0.0, 0, head).rotation.z = HP;
       }
-      mesh(tor(0.16, 0.012, Math.PI), M.trim, 0, 0.0, 0, head);
+      mesh(tor(0.168, 0.012, Math.PI), M.trim, 0, 0.0, 0, head);
       mesh(cyl(0.006, 0.006, 0.22), M.trim, 0.14, 0.18, -0.02, head);
       mesh(sph(0.022, 10, 8), M.glow, 0.14, 0.3, -0.02, head);
-      for (const s of [1, -1]) glowBar(0.01, 0.01, 0.16, 0.05 * s, 0.155, 0.0, head);              // head-top light strips
+      for (const s of [1, -1]) glowCap(0.005, 0.15, 0.05 * s, 0.17, -0.01, head, 'z');                           // head-top light strips
       // Tesla coils on the back
       for (const s of [1, -1]) {
-        mesh(cyl(0.03, 0.03, 0.34), M.trim, 0.1 * s, 0.1, -0.08, pack);
-        for (let i = 0; i < 3; i++) mesh(tor(0.045, 0.01), M.glow, 0.1 * s, 0.0 + i * 0.09, -0.08, pack).rotation.x = Math.PI / 2;
-        mesh(sph(0.032, 10, 8), M.armorDark, 0.1 * s, 0.28, -0.08, pack);                          // coil tips
-        mesh(cyl(0.04, 0.04, 0.03), M.armorDark, 0.1 * s, -0.06, -0.08, pack);
+        mesh(cyl(0.03, 0.03, 0.34, 16), M.trim, 0.1 * s, 0.1, -0.08, pack);
+        for (let i = 0; i < 3; i++) mesh(tor(0.045, 0.01), M.glow, 0.1 * s, 0.0 + i * 0.09, -0.08, pack).rotation.x = HP;
+        mesh(sph(0.032, 12, 8), M.armorDark, 0.1 * s, 0.28, -0.08, pack);
+        mesh(cyl(0.04, 0.04, 0.03, 16), M.armorDark, 0.1 * s, -0.06, -0.08, pack);
       }
     }
   }
