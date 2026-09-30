@@ -144,7 +144,10 @@ export const WEAPONS = [
   { id: 'sniper', name: 'Sniper', slot: 'primary', cat: 'Snipers', price: 4200, dmg: 110, head: 1.6, rate: 1.4, mag: 5, reload: 2.6, pellets: 1,
     spread: 0.05, moveSpread: 0.05, recoil: 0.08, falloff: [80, 160, 0.9], zoom: 3.6, adsSpread: 0.01, moveMul: 0.9, scope: true },
   { id: 'lmg', name: 'LMG', slot: 'primary', cat: 'Heavy', price: 3200, dmg: 24, head: 2.0, rate: 0.085, mag: 60, reload: 3.4, pellets: 1,
-    spread: 0.016, moveSpread: 0.05, recoil: 0.01, falloff: [30, 70, 0.75], zoom: 1.4, adsSpread: 0.5, moveMul: 0.85 }
+    spread: 0.016, moveSpread: 0.05, recoil: 0.01, falloff: [30, 70, 0.75], zoom: 1.4, adsSpread: 0.5, moveMul: 0.85 },
+  // Always carried in slot 3, never bought or dropped. Left click slashes, right click is a slower heavy stab.
+  { id: 'knife', name: 'Knife', slot: 'melee', cat: 'Melee', price: 0, dmg: 50, head: 1, rate: 0.45, mag: 1, reload: 0, pellets: 1,
+    spread: 0, moveSpread: 0, recoil: 0, falloff: [99, 99, 1], zoom: 1, adsSpread: 1, moveMul: 1.1, melee: true, range: 2.3, heavy: 75, heavyRate: 1.0 },
 ];
 export const weaponById = id => WEAPONS.find(w => w.id === id) || WEAPONS[0];
 
@@ -165,7 +168,11 @@ export const SKINS = [
   { id: 'neon', name: 'Neon Pulse', price: 800, tier: 'Premium' },
   { id: 'gold', name: 'Solid Gold', price: 1100, tier: 'Premium' },
   { id: 'dragon', name: 'Dragonfire', price: 1400, tier: 'Exclusive' },
-  { id: 'galaxy', name: 'Galaxy', price: 1800, tier: 'Ultra' }
+  { id: 'galaxy', name: 'Galaxy', price: 1800, tier: 'Ultra' },
+  // Animated: the surface moves (see ANIM_GLSL in skins.js) and flares when you inspect
+  { id: 'glitch', name: 'Glitchwave', price: 2400, tier: 'Mythic', animated: true },
+  { id: 'plasma', name: 'Plasma Flow', price: 2200, tier: 'Mythic', animated: true },
+  { id: 'inferno', name: 'Inferno', price: 2200, tier: 'Mythic', animated: true }
 ];
 export const COINS = { start: 500, match: 50, win: 100, kill: 10, round: 5 };
 

@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { CHARACTERS, charById, WEAPONS, SKINS, COINS, VERSION } from './game/data.js';
 import { MAPS } from './game/maps.js';
 import { MenuStage } from './game/MenuStage.js';
+import { tickSkins, skinBurst } from './game/skins.js';
 import { Game } from './game/Game.js';
 import { Hud } from './ui/hud.js';
 import { BuyMenu } from './ui/buy.js';
@@ -274,7 +275,8 @@ $$('#quality-seg button').forEach(b => b.addEventListener('click', () => { setti
 $$('#camera-seg button').forEach(b => b.addEventListener('click', () => { settings.camera = b.dataset.v; save(); refreshSettingsUI(); }));
 
 // ---------------------------------------------------------------- store (daily offers)
-const TIER_COL = { Base: '#9aa3ad', Select: '#7fc8ff', Deluxe: '#3dff9a', Premium: '#d07bff', Exclusive: '#ffb347', Ultra: '#ffd166' };
+const TIER_COL = { Base: '#9aa3ad', Select: '#7fc8ff', Deluxe: '#3dff9a', Premium: '#d07bff', Exclusive: '#ffb347', Ultra: '#ffd166', Mythic: '#ff4fd8' };
+const animTag = k => k.animated ? ' <span class="anim-tag">ANIMATED</span>' : '';
 const skinById = id => SKINS.find(k => k.id === id);
 const wName = id => WEAPONS.find(w => w.id === id).name;
 const owns = (w, k) => k === 'default' || profile.owned.includes(w + ':' + k);
@@ -302,16 +304,16 @@ function renderStore() {
   const { featured, offers } = dailyStore();
   const fs = skinById(featured.k);
   $('#store-featured').className = 'featured' + (storeSel.w === featured.w && storeSel.k === featured.k ? ' sel' : '');
-  $('#store-featured').innerHTML = `<div class="fw" style="color:${TIER_COL[fs.tier]}">${fs.tier} · ${wName(featured.w)}</div><div class="fn">${fs.name}</div><div class="fp">${owns(featured.w, featured.k) ? 'OWNED' : '◈ ' + fs.price.toLocaleString()}</div>`;
+  $('#store-featured').innerHTML = `<div class="fw" style="color:${TIER_COL[fs.tier]}">${fs.tier} · ${wName(featured.w)}</div><div class="fn">${fs.name}${animTag(fs)}</div><div class="fp">${owns(featured.w, featured.k) ? 'OWNED' : '◈ ' + fs.price.toLocaleString()}</div>`;
   $('#store-offers').innerHTML = offers.map((o, i) => {
     const k = skinById(o.k), have = owns(o.w, o.k), sel = storeSel.w === o.w && storeSel.k === o.k;
     return `<button class="offer ${sel ? 'sel' : ''} ${have ? 'owned' : ''}" data-i="${i}"><span class="bar" style="background:${TIER_COL[k.tier]}"></span>
       <span class="ot" style="color:${TIER_COL[k.tier]}">${k.tier.toUpperCase()}</span>
-      <div><div class="on">${k.name}</div><div class="ow">${wName(o.w)}</div></div>
+      <div><div class="on">${k.name}${animTag(k)}</div><div class="ow">${wName(o.w)}</div></div>
       <div class="op">${have ? 'OWNED' : '◈ ' + k.price.toLocaleString()}</div></button>`;
   }).join('');
   const k = skinById(storeSel.k), have = owns(storeSel.w, storeSel.k), equipped = profile.equipped[storeSel.w] === storeSel.k;
-  $('#store-preview').innerHTML = `<div class="pv-name">${k.name}</div><div class="pv-sub">${wName(storeSel.w)} · <span style="color:${TIER_COL[k.tier]}">${k.tier}</span></div>` +
+  $('#store-preview').innerHTML = `<div class="pv-name">${k.name}${animTag(k)}</div><div class="pv-sub">${wName(storeSel.w)} · <span style="color:${TIER_COL[k.tier]}">${k.tier}</span></div><button class="btn" id="store-inspect">Inspect</button>` +
     (have ? (equipped ? '<button class="btn" disabled>Equipped</button>' : '<button class="btn big green" id="store-equip">Equip</button>')
       : `<button class="btn big gold" id="store-buy" ${profile.coins < k.price ? 'disabled' : ''}>${profile.coins < k.price ? `Need ◈ ${(k.price - profile.coins).toLocaleString()} more` : `Buy for ◈ ${k.price.toLocaleString()}`}</button>`);
   stage.showGun(storeSel.w, storeSel.k);
@@ -331,6 +333,7 @@ $('#store-preview').addEventListener('click', e => {
     toast(`${k.name} ${wName(storeSel.w)} unlocked and equipped`, 2500, true);
     renderStore();
   }
+  if (e.target.id === 'store-inspect') { stage.inspectGun(); skinBurst(); sfx.inspect?.(); }
   if (e.target.id === 'store-equip') { profile.equipped[storeSel.w] = storeSel.k; saveProfile(); renderStore(); }
 });
 setInterval(() => {
@@ -350,14 +353,15 @@ function renderLocker() {
   }).join('');
   const eq = profile.equipped[lockerWeapon] || 'default';
   const count = SKINS.filter(k => owns(lockerWeapon, k.id)).length;
-  $('#locker-title').innerHTML = `${wName(lockerWeapon).toUpperCase()} <span class="muted small">${count}/${SKINS.length} owned</span>`;
+  $('#locker-title').innerHTML = `${wName(lockerWeapon).toUpperCase()} <span class="muted small">${count}/${SKINS.length} owned</span> <button class="btn" id="locker-inspect">Inspect</button>`;
   $('#locker-skins').innerHTML = SKINS.map(k => {
     const have = owns(lockerWeapon, k.id);
-    return `<button class="ls ${k.id === eq ? 'eq' : ''} ${have ? '' : 'locked'}" data-k="${k.id}" ${have ? '' : 'disabled'}><span>${k.name}</span><span class="tag" style="color:${have ? TIER_COL[k.tier] : 'var(--muted)'}">${k.id === eq ? 'EQUIPPED' : have ? k.tier.toUpperCase() : 'IN STORE'}</span></button>`;
+    return `<button class="ls ${k.id === eq ? 'eq' : ''} ${have ? '' : 'locked'}" data-k="${k.id}" ${have ? '' : 'disabled'}><span>${k.name}${animTag(k)}</span><span class="tag" style="color:${have ? TIER_COL[k.tier] : 'var(--muted)'}">${k.id === eq ? 'EQUIPPED' : have ? k.tier.toUpperCase() : 'IN STORE'}</span></button>`;
   }).join('');
   stage.showGun(lockerWeapon, eq);
   stage.setMode('gun');
 }
+$('#locker-title').addEventListener('click', e => { if (e.target.id === 'locker-inspect') { stage.inspectGun(); skinBurst(); sfx.inspect?.(); } });
 $('#locker-grid').addEventListener('click', e => { const b = e.target.closest('.lk'); if (b) { lockerWeapon = b.dataset.w; renderLocker(); } });
 $('#locker-skins').addEventListener('click', e => { const b = e.target.closest('.ls'); if (b && !b.disabled) { profile.equipped[lockerWeapon] = b.dataset.k; saveProfile(); renderLocker(); } });
 
@@ -827,6 +831,7 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
+  tickSkins(dt);
   const g = app.game;
   if (g) {
     g.update(dt);

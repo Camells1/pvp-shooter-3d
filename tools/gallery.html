@@ -29,6 +29,7 @@ import { CHARACTERS, WEAPONS, SKINS } from '../src3d/game/data.js';
 import { CharacterModel, buildGun } from '../src3d/game/models.js';
 import { ViewModel } from '../src3d/game/viewmodel.js';
 import { getEnvMap } from '../src3d/game/envmap.js';
+import { tickSkins, skinBurst } from '../src3d/game/skins.js';
 
 const q = new URLSearchParams(location.search);
 const view = q.get('view') || 'chars';
@@ -121,12 +122,14 @@ composer.addPass(new RenderPass(scene, camera));
 composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.45, 0.4, 0.9));
 composer.addPass(new OutputPass());
 
+tickSkins(+(q.get('t') || 1.3)); if (q.get('burst')) skinBurst(+q.get('burst'));
 const rl = q.has('rl') ? +q.get('rl') : -1;
 // &mv=5 walks the agents forward (frozen mid-stride after &fr frames)
 const mv = +(q.get('mv') || 0), fr = +(q.get('fr') || 5);
 const st = { vx: 0, vz: 0, yaw: 0, pitch: +(q.get('pitch') || 0), grounded: q.get('air') !== '1', dead: false, reload: rl, crouch: +(q.get('cr') || 0), kneel: q.get('kn') === '1' };
 for (const { m, yaw } of models) { m.setShadow(true); for (let i = 0; i < fr; i++) m.update(0.05, { ...st, yaw, vx: -Math.sin(yaw) * mv, vz: -Math.cos(yaw) * mv }); }
-if (vm) for (let i = 0; i < 20; i++) vm.update(0.05, { speed: 0, grounded: true, ads: q.get('ads') === '1', reload: rl }, camera);
+if (vm) { for (let i = 0; i < 20; i++) vm.update(0.05, { speed: 0, grounded: true, ads: q.get('ads') === '1', reload: rl }, camera);
+  if (q.get('act')) { vm.play(q.get('act')); vm.update(+(q.get('at') || 0.5), { speed: 0, grounded: true, ads: false, reload: -1 }, camera); } }
 composer.render();
 if (vm) { renderer.autoClear = false; renderer.clearDepth(); renderer.render(vm.scene, vm.camera); renderer.autoClear = true; }
 const el = document.getElementById('labels');

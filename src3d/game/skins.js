@@ -147,6 +147,55 @@ const detail = kind => {
 const texCache = {};
 const T = k => (texCache[k] ||= TEX[k]());
 
+// ---------------------------------------------------------------- animated skins
+// One clock for every animated skin; tickSkins(dt) runs from the main loop. skinBurst() makes them flare
+// (inspect, and the Inspect button in the store and locker).
+const SKIN_TIME = { value: 0 }, SKIN_BURST = { value: 0 };
+export function tickSkins(dt) { SKIN_TIME.value += dt; SKIN_BURST.value = Math.max(0, SKIN_BURST.value - dt * 0.7); }
+export function skinBurst(v = 1) { SKIN_BURST.value = Math.max(SKIN_BURST.value, v); }
+const ANIM_GLSL = {
+  // Pink and cyan scan bands sweep along the gun while blocks of the surface glitch in and out
+  glitch: `
+    vec3 q = vAPos * 22.0;
+    float ax = dot(vAPos, vec3(0.35, 0.55, 1.0)) * 14.0;
+    float band = pow(0.5 + 0.5 * sin(ax - uTime * 5.0), 18.0);
+    float band2 = pow(0.5 + 0.5 * sin(ax * 0.37 + uTime * 2.3), 30.0);
+    vec3 cell = floor(q * vec3(0.9, 2.2, 0.6));
+    float h = fract(sin(dot(cell + floor(uTime * 7.0), vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+    float blk = step(0.955 - 0.08 * uBurst, h);
+    vec3 pink = vec3(1.0, 0.18, 0.62), cyan = vec3(0.15, 0.95, 1.0);
+    vec3 gc = mix(pink, cyan, step(0.5, fract(h * 7.0)));
+    float lines = step(0.92, fract(q.y * 1.6 + uTime * 0.8)) * 0.35;
+    totalEmissiveRadiance += (mix(pink, cyan, 0.5 + 0.5 * sin(ax * 0.2 + uTime)) * (band * 1.4 + band2 * 1.1 + lines) + gc * blk * 1.8) * (1.0 + uBurst * 2.5);`,
+  // Liquid energy flowing down the body
+  plasma: `
+    vec3 q = vAPos * 11.0;
+    float f = sin(q.z * 2.1 + uTime * 2.6 + sin(q.y * 4.3 - uTime * 1.7) * 1.6) * sin(q.x * 3.3 - uTime * 1.9 + q.z * 1.2 + sin(q.y * 2.0 + uTime) );
+    float vein = smoothstep(0.72, 1.0, abs(f));
+    float pulse = 0.5 + 0.5 * sin(uTime * 3.0 - q.z * 0.8);
+    vec3 c = mix(vec3(0.35, 0.1, 1.0), vec3(0.1, 0.85, 1.0), pulse);
+    totalEmissiveRadiance += c * (vein * 2.6 + 0.12) * (1.0 + uBurst * 3.0);`,
+  // Flames licking up the sides
+  inferno: `
+    vec3 q = vAPos * 16.0;
+    float n = sin(q.x * 3.1 + sin(q.y * 2.0 - uTime * 5.0) * 1.3) + sin(q.z * 2.3 - uTime * 3.7 + q.y * 1.5) + 0.6 * sin(q.y * 5.0 - uTime * 9.0 + q.z);
+    float fl = smoothstep(0.2, 1.7, n + (1.0 - fract(q.y * 0.25 - uTime * 0.9)) * 0.8);
+    vec3 c = mix(vec3(1.0, 0.16, 0.0), vec3(1.0, 0.78, 0.22), fl * fl);
+    totalEmissiveRadiance += c * (fl * 3.4 + 0.08) * (1.0 + uBurst * 2.5);`,
+};
+function animate(mat, kind) {
+  mat.userData.animated = kind;
+  mat.customProgramCacheKey = () => 'rl-anim-' + kind;
+  mat.onBeforeCompile = sh => {
+    sh.uniforms.uTime = SKIN_TIME; sh.uniforms.uBurst = SKIN_BURST;
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vAPos;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvAPos = position;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vAPos;\nuniform float uTime;\nuniform float uBurst;')
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n' + ANIM_GLSL[kind]);
+  };
+  return mat;
+}
+
 const cache = new Map();
 // Returns { body, metal, polymer, accent, glow } materials for a skin.
 export function skinMats(skin = 'default', accent = 0xff8800) {
@@ -182,6 +231,15 @@ export function skinMats(skin = 'default', accent = 0xff8800) {
       break;
     case 'galaxy':
       m = { body: M({ map: T('galaxy'), metalness: 0.3, roughness: 0.25, emissiveMap: T('galaxyStars'), emissive: 0xffffff, emissiveIntensity: 1.6 }), metal: M({ color: 0x3a2a5a, metalness: 0.9, roughness: 0.2 }), polymer: M({ map: T('galaxy'), metalness: 0.2, roughness: 0.4, emissiveMap: T('galaxyStars'), emissive: 0xffffff, emissiveIntensity: 1.2 }), accent: M({ color: 0x111111, emissive: 0xb86bff, emissiveIntensity: 2 }), glow: glow(0xff4ad8) };
+      break;
+    case 'glitch':
+      m = { body: animate(M({ color: 0x1a1426, metalness: 0.55, roughness: 0.28 }), 'glitch'), metal: M({ color: 0xc9c2d8, metalness: 1, roughness: 0.18 }), polymer: animate(M({ color: 0x0d0a14, metalness: 0.3, roughness: 0.4 }), 'glitch'), accent: M({ color: 0x111111, emissive: 0xff2f9a, emissiveIntensity: 2.2 }), glow: glow(0x2ff0ff) };
+      break;
+    case 'plasma':
+      m = { body: animate(M({ color: 0x0b0e2a, metalness: 0.6, roughness: 0.22 }), 'plasma'), metal: M({ color: 0x8fa0ff, metalness: 1, roughness: 0.15 }), polymer: M({ color: 0x07081a, metalness: 0.3, roughness: 0.4 }), accent: animate(M({ color: 0x14163a, metalness: 0.7, roughness: 0.2 }), 'plasma'), glow: glow(0x6a5cff) };
+      break;
+    case 'inferno':
+      m = { body: animate(M({ color: 0x1c0d08, metalness: 0.45, roughness: 0.4 }), 'inferno'), metal: M({ color: 0x3a2a22, metalness: 0.9, roughness: 0.3 }), polymer: M({ color: 0x120806, metalness: 0.2, roughness: 0.55 }), accent: animate(M({ color: 0x2a1208, metalness: 0.8, roughness: 0.25 }), 'inferno'), glow: glow(0xff6a10) };
       break;
     default:
       m = { body: M({ color: 0x474e58, metalness: 0.7, roughness: 0.34 }), metal: M({ color: 0x9aa2ac, metalness: 0.95, roughness: 0.2 }), polymer: M({ color: 0x24282e, metalness: 0.08, roughness: 0.72 }), accent: M({ color: accent, metalness: 0.35, roughness: 0.32 }), glow: glow(accent) };

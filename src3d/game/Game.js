@@ -19,6 +19,7 @@ import { Effects } from './effects.js';
 import { getEnvMap } from './envmap.js';
 import { ViewModel } from './viewmodel.js';
 import { sfx } from '../audio.js';
+import { skinBurst } from './skins.js';
 
 const SEND_HZ = 30;
 const INTERP_DELAY = 100;
@@ -206,7 +207,7 @@ export class Game {
     const char = charById(r.char);
     const local = r.id === this.myId || (r.isBot && this.isHost);
     const E = { id: r.id, name: r.name, tag: r.tag || '', team: r.team, char, isBot: !!r.isBot, owner: r.isBot ? 'h' : r.id, local, alive: true, connected: true, kills: 0, deaths: 0, skins: r.skins || {}, dummy: r.dummy };
-    if (local) { E.sim = new Player(char, this.world); E.sim.skins = E.skins; E.sim.inv.sidearm.skin = E.skins.classic || 'default'; }
+    if (local) { E.sim = new Player(char, this.world); E.sim.skins = E.skins; E.sim.inv.sidearm.skin = E.skins.classic || 'default'; E.sim.inv.melee.skin = E.skins.knife || 'default'; }
     else E.remote = new RemotePlayer(char);
     E.st = E.sim || E.remote;
     E.model = new CharacterModel(char);
@@ -312,8 +313,9 @@ export class Game {
         this.keys[e.code] = true; this.pressed[e.code] = true;
         if (e.code === 'Digit1') this._selectSlot('primary');
         if (e.code === 'Digit2') this._selectSlot('sidearm');
+        if (e.code === 'Digit3') this._selectSlot('melee');
         if (e.code === 'KeyB') this._toggleBuy();
-        if (e.code === 'KeyY' && this.me.alive && !this.buyOpen) this._bcast({ type: 'anim', id: this.me.id, ab: 'inspect' });
+        if (e.code === 'KeyY' && this.me.alive && !this.buyOpen) { this._bcast({ type: 'anim', id: this.me.id, ab: 'inspect' }); skinBurst(); sfx.inspect?.(); }
         if (e.code === 'KeyV') { this.settings.camera = this.settings.camera === 'third' ? 'first' : 'third'; this.onSettingsChange?.(); }
         if (['Space', 'Tab'].includes(e.code)) e.preventDefault();
       },
@@ -330,7 +332,7 @@ export class Game {
         if (Math.abs(e.movementX) > 500 || Math.abs(e.movementY) > 500) return;
         this.mdx += e.movementX; this.mdy += e.movementY;
       },
-      wheel: () => { if (this.pointer.locked) this._selectSlot(this.wantSlot === 'primary' ? 'sidearm' : 'primary'); },
+      wheel: () => { if (!this.pointer.locked) return; const order = ['primary', 'sidearm', 'melee'].filter(k => this.me.sim.inv[k]); this._selectSlot(order[(order.indexOf(this.wantSlot) + 1) % order.length]); },
       ctx: e => e.preventDefault(),
       blur: () => { this.keys = {}; this.mouse.left = this.mouse.right = false; }
     };
@@ -901,8 +903,31 @@ export class Game {
     return { point, T: hit?.T || null, head: !!hit?.head, normal: wh ? new THREE.Vector3(wh.nx, wh.ny, wh.nz) : null, wall: !hit && !!wh };
   }
 
-  _fire(E, ads) {
+  // Knife: short reach from the eyes, instant. Stabbing or slashing someone from behind does double damage.
+  _melee(E, heavy) {
+    const s = E.sim, w = s.w, isMe = E === this.me;
+    const eye = new THREE.Vector3(s.pos.x, s.pos.y + s.h * 0.86, s.pos.z);
+    const a = s.aimDir(), d = new THREE.Vector3(a.x, a.y, a.z);
+    if (isMe) { this.camera.updateMatrixWorld(); this.camera.getWorldDirection(d); }
+    const tr = this._trace(E, eye, d, w.range);
+    E.model.play(heavy ? 'stab' : 'slash');
+    if (isMe) { this.vm.play(heavy ? 'stab' : 'slash'); sfx.gun('knife'); } else this._spatialGun(s.pos, 'knife');
+    this.net?.send({ type: 'shot', id: E.id, w: 'knife', e: [], h: heavy ? 1 : 0 });
+    if (tr.T) {
+      const T = tr.T, f = T.st.forward();
+      const back = f.x * d.x + f.z * d.z > 0.35;
+      const dmg = (heavy ? w.heavy : w.dmg) * (back ? 2 : 1);
+      this.fx.burst(tr.point, T.st.invulnerable ? T.char.accent : T.char.color, 14, 4, 0.35, 8, 0.8, d.clone().multiplyScalar(-1));
+      s.hits++;
+      if (isMe) this._hitFeedback(T, dmg, back);
+      T.model.hit();
+      this._dealDamage(T, dmg, back, E.id, w.id, [r3(s.pos.x), r3(s.pos.y), r3(s.pos.z)]);
+    } else if (tr.wall && tr.normal) this.fx.impact(tr.point, tr.normal);
+  }
+
+  _fire(E, ads, heavy) {
     const s = E.sim, w = s.w;
+    if (w.melee) return this._melee(E, heavy);
     const isMe = E === this.me;
     const fp = isMe && this._firstPerson();
     const eye = { x: s.pos.x, y: s.pos.y + s.h * 0.86, z: s.pos.z };
@@ -988,6 +1013,7 @@ export class Game {
     const E = this.ents.get(m.id);
     if (!E || E.local) return;
     if (E.remote) E.remote.cloaked = false;
+    if (m.w === 'knife') { E.model.play(m.h ? 'stab' : 'slash'); this._spatialGun(E.st.pos, 'knife'); return; }
     E.model.root.updateMatrixWorld(true);
     const muzzle = E.model.getMuzzle(new THREE.Vector3());
     for (const p of m.e) {
@@ -1383,7 +1409,8 @@ export class Game {
     }
     this.mdx = 0; this.mdy = 0;
 
-    const ads = active && this.mouse.right;
+    const knife = !!this.me.sim?.w?.melee;
+    const ads = active && this.mouse.right && !knife;
     const input = {
       mx: active ? (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0) : 0,
       mz: active ? (K.KeyW ? 1 : 0) - (K.KeyS ? 1 : 0) : 0,
@@ -1392,6 +1419,7 @@ export class Game {
       crouch: active && !!(K.KeyC || (CTRL_CROUCH && (K.ControlLeft || K.ControlRight))),
       yaw: this.yaw, pitch: this.pitch,
       fire: active && this.mouse.left,
+      alt: active && this.mouse.right && knife,
       ads, reload: active && !!P.KeyR,
       slot: this.wantSlot,
       ab: active ? (P.KeyQ ? 'Q' : P.KeyE ? 'E' : P.KeyX ? 'X' : null) : null
@@ -1417,7 +1445,7 @@ export class Game {
         const inp = E === me ? input : E.bot.think(simDt);
         const ch = this._channel(E, E === me ? useHeld : !!inp.use, simDt);
         if (E === me) myChannel = ch;
-        E.sim.update(simDt, inp, (s, a) => this._fire(E, a));
+        E.sim.update(simDt, inp, (s, a, heavy) => this._fire(E, a, heavy));
         if (E === me && !ms.inv[this.wantSlot]) this.wantSlot = ms.slot;
         if (E.alive && !E.sim.dead && E.sim.pos.y < this.map.killY) this._announceDeath(E, null, false, null, 'fall');
         this._localEvents(E);
@@ -1522,7 +1550,7 @@ export class Game {
     if (fp) {
       this.vm.setWeapon(ms.weaponId, ms.skinId);
       this.vm.visible = true;
-      if (input.fire || ads) this.vm.cancelInspect();
+      if (input.fire || ads || input.alt) this.vm.cancelInspect();
       this.vm.update(dt, { speed: Math.hypot(ms.vel.x, ms.vel.z), grounded: ms.grounded, ads: ads, reload: ms.reloadProgress, walk: input.walk, channel: ms.channeling }, this.camera);
     }
     this.fx.update(dt);

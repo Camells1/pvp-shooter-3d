@@ -539,3 +539,7 @@ input[type=checkbox] { accent-color: var(--cyan); width: 16px; height: 16px; }
 .lobby > .seg { display: inline-flex; flex-direction: row; width: auto; gap: 0; }
 .lobby > .queue-status { flex-direction: row; justify-content: center; }
 @media (max-width: 760px) { .lobby > .agent-pick { grid-template-columns: repeat(4, 1fr); } }
+.anim-tag { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 4px; font-size: 9px; font-weight: 800; letter-spacing: 1.5px; vertical-align: middle; color: #fff;
+  background: linear-gradient(90deg, #ff2f9a, #7a5cff, #2ff0ff, #ff2f9a); background-size: 300% 100%; animation: animtag 2.4s linear infinite; }
+@keyframes animtag { to { background-position: 300% 0; } }
+#locker-inspect, #store-inspect { margin-left: 8px; padding: 4px 12px; font-size: 12px; }

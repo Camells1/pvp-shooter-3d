@@ -274,7 +274,8 @@ const BORES = {
   ar: [[0, 0.03, 0.68, 0.0085]],
   scout: [[0, 0.035, 0.835, 0.0115]],
   lmg: [[0, 0.03, 0.75, 0.0145]],
-  sniper: [[0, 0.035, 0.8, 0.0115]]
+  sniper: [[0, 0.035, 0.8, 0.0115]],
+  knife: []
 };
 
 export function buildGun(id, accent = 0xff8800, skin = 'default') {
@@ -349,7 +350,29 @@ export function buildGun(id, accent = 0xff8800, skin = 'default') {
   };
 
   let muzzle, grip = new THREE.Vector3(0, -0.07, 0), fore, sight, sightType = 'iron';
-  if (id === 'classic') {
+  if (id === 'knife') {
+    // Combat knife held in a forward grip: handle through the fist, blade out along +Z. The blade takes the skin.
+    const sh = new THREE.Shape();
+    sh.moveTo(0, -0.017); sh.lineTo(0.15, -0.019); sh.quadraticCurveTo(0.225, -0.018, 0.262, 0.012);   // edge sweeping up to the tip
+    sh.lineTo(0.2, 0.019); sh.lineTo(0.17, 0.024); sh.lineTo(0.02, 0.024); sh.lineTo(0, 0.02); sh.lineTo(0, -0.017); // clipped spine
+    const bg = new THREE.ExtrudeGeometry(sh, { depth: 0.004, bevelEnabled: true, bevelThickness: 0.0035, bevelSize: 0.0035, bevelSegments: 2, curveSegments: 10 });
+    bg.translate(0, 0, -0.002);
+    const blade = add(bg, m.body, 0, -0.07, 0.075, 0, -Math.PI / 2, 0);
+    void blade;
+    add(rb(0.0035, 0.008, 0.15, 0.001), INSET, 0.0045, -0.066, 0.16); add(rb(0.0035, 0.008, 0.15, 0.001), INSET, -0.0045, -0.066, 0.16); // fullers
+    add(rb(0.0042, 0.004, 0.13, 0.0015), m.glow, 0.0048, -0.057, 0.16); add(rb(0.0042, 0.004, 0.13, 0.0015), m.glow, -0.0048, -0.057, 0.16); // glow strips
+    add(rb(0.012, 0.006, 0.05, 0.002), m.metal, 0, -0.047, 0.12);                                       // spine serration plate
+    for (let i = 0; i < 5; i++) add(rb(0.013, 0.004, 0.004, 0.001), m.metal, 0, -0.044, 0.1 + i * 0.01);
+    add(rb(0.03, 0.078, 0.016, 0.005), m.accent, 0, -0.066, 0.068);                                     // guard
+    add(rb(0.034, 0.012, 0.02, 0.004), m.metal, 0, -0.03, 0.068);
+    add(rb(0.028, 0.034, 0.13, 0.012), m.polymer, 0, -0.072, 0.0);                                      // handle
+    for (let i = 0; i < 4; i++) add(rb(0.03, 0.036, 0.008, 0.003), m.accent, 0, -0.072, -0.04 + i * 0.026); // grip rings
+    add(rb(0.032, 0.04, 0.022, 0.008), m.metal, 0, -0.07, -0.073);                                      // pommel
+    add(rb(0.008, 0.008, 0.008, 0.002), m.glow, 0, -0.07, -0.085);
+    muzzle = new THREE.Vector3(0, -0.06, 0.34);
+    fore = new THREE.Vector3(0.24, 0.02, -0.12);   // off hand up in a guard, clear of the blade
+    sight = new THREE.Vector3(0, 0.02, -0.1);
+  } else if (id === 'classic') {
     add(rb(0.05, 0.055, 0.22, 0.012), m.body, 0, 0.035, 0.07);
     for (let i = 0; i < 6; i++) add(rb(0.052, 0.04, 0.004, 0.001), m.polymer, 0, 0.04, -0.02 + i * 0.008);
     add(rb(0.052, 0.012, 0.16, 0.004), m.accent, 0, 0.066, 0.06);
@@ -733,6 +756,24 @@ const _x = new THREE.Vector3(), _y = new THREE.Vector3(), _z = new THREE.Vector3
 const _q = new THREE.Quaternion(), DOWN = new THREE.Vector3(0, -1, 0);
 const _mi = new THREE.Matrix4(), _f = new THREE.Vector3(), _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion(), _e = new THREE.Euler();
 
+// Keyframed one-shot tracks: [t, dx, dy, dz, rx, ry, rz] in first-person holder space (x right, y up, -z forward).
+// The third-person model mirrors them onto the gun mount.
+export function keyed(keys, k) {
+  let i = 1; while (i < keys.length - 1 && keys[i][0] < k) i++;
+  const a = keys[i - 1], b = keys[i], u = THREE.MathUtils.clamp((k - a[0]) / Math.max(1e-4, b[0] - a[0]), 0, 1), e = u * u * (3 - 2 * u);
+  return [1, 2, 3, 4, 5, 6].map(j => a[j] + (b[j] - a[j]) * e);
+}
+const TAU = Math.PI * 2;
+// Gun: turn it to show the left side, hold, roll it over to show the top and right, hold, back
+export const INSPECT_GUN = [[0, 0, 0, 0, 0, 0, 0], [0.16, -0.12, 0.05, 0.1, 0.12, 1.25, -0.5], [0.42, -0.13, 0.06, 0.1, 0.2, 1.35, -0.62],
+  [0.58, -0.07, 0.05, 0.06, -0.35, -0.55, 0.95], [0.82, -0.06, 0.05, 0.05, -0.42, -0.66, 1.05], [1, 0, 0, 0, 0, 0, 0]];
+// Knife: raise it, twirl it a full turn in the fingers, flip to the other face, spin it back into the grip
+export const INSPECT_KNIFE = [[0, 0, 0, 0, 0, 0, 0], [0.14, -0.1, 0.08, 0.06, 0.25, 0.95, -0.35], [0.36, -0.1, 0.1, 0.06, 0.25, 0.95, -0.35 - TAU],
+  [0.52, -0.08, 0.09, 0.06, 0.1, -0.85, 0.3 - TAU], [0.72, -0.08, 0.09, 0.06, 0.1, -0.95, 0.4 - TAU], [0.86, 0.02, 0.02, 0.02, 0.8, 0, -TAU], [1, 0, 0, 0, 0, 0, -TAU]];
+// Knife attacks: slash wind-up high right then cut across, stab pull back then thrust
+export const SLASH = [[0, 0, 0, 0, 0, 0, 0], [0.22, 0.1, 0.1, 0.02, 0.35, -0.45, 0.9], [0.5, -0.26, -0.1, -0.14, -0.45, 0.7, -0.7], [1, 0, 0, 0, 0, 0, 0]];
+export const STAB = [[0, 0, 0, 0, 0, 0, 0], [0.3, 0.03, 0.04, 0.14, 0.3, 0, 0], [0.5, -0.04, 0.0, -0.3, -0.12, 0, 0], [0.68, -0.04, 0.0, -0.3, -0.12, 0, 0], [1, 0, 0, 0, 0, 0, 0]];
+
 export class CharacterModel {
   constructor(char) {
     this.char = char;
@@ -1091,8 +1132,9 @@ export class CharacterModel {
     this.gunMount.add(this.gun);
     if (this.shadowOn === false) this.gun.traverse(o => { if (o.isMesh) o.castShadow = false; });
     // Sidearms are held closer to the chest
-    const side = SIDEARMS.has(id);
+    const side = SIDEARMS.has(id) || id === 'knife';
     this.gunBase.set(side ? -0.07 : -0.13, side ? 0.16 : 0.13, side ? 0.36 : 0.28);
+    if (id === 'knife') this.gunBase.set(-0.1, 0.08, 0.36);
   }
 
   // Muzzle world position (after updateMatrixWorld)
@@ -1105,7 +1147,7 @@ export class CharacterModel {
 
   // One-shot body animations for abilities and gestures
   play(kind) {
-    const DUR = { throw: 0.55, cast: 0.7, slam: 0.8, dash: 0.3, blink: 0.35, brace: 0.6, rocket: 0.6, inspect: 2.2, wave: 1.6 };
+    const DUR = { throw: 0.55, cast: 0.7, slam: 0.8, dash: 0.3, blink: 0.35, brace: 0.6, rocket: 0.6, inspect: 2.4, wave: 1.6, slash: 0.42, stab: 0.75 };
     if (!DUR[kind]) return;
     this.act = { kind, t: 0, dur: DUR[kind] };
   }
@@ -1301,7 +1343,15 @@ export class CharacterModel {
     if (kn > 0.01) { g.rotation.x += 0.7 * kn; g.position.y -= 0.1 * kn; }
     if (act === 'brace') { g.position.y += 0.08 * env; g.rotation.x -= 0.35 * env; }
     if (act === 'rocket') { g.position.y += 0.1 * env; g.position.x += 0.04 * env; g.rotation.x -= 0.25 * env; }
-    if (act === 'inspect') { g.rotation.y += 1.3 * env; g.rotation.z -= 0.5 * env; g.position.x += 0.1 * env; g.position.y += 0.12 * env; g.position.z -= 0.08 * env; }
+    if (act === 'inspect') {
+      const K = keyed(this.weaponId === 'knife' ? INSPECT_KNIFE : INSPECT_GUN, k);
+      g.position.x -= K[0]; g.position.y += K[1]; g.position.z -= K[2]; g.rotation.x -= K[3]; g.rotation.y += K[4]; g.rotation.z -= K[5];
+    }
+    if (act === 'slash' || act === 'stab') {
+      const K = keyed(act === 'slash' ? SLASH : STAB, k);
+      g.position.x -= K[0]; g.position.y += K[1]; g.position.z -= K[2] * 1.4; g.rotation.x -= K[3]; g.rotation.y += K[4]; g.rotation.z -= K[5];
+      this.chest.rotation.y += (act === 'slash' ? -0.35 : 0.1) * env; this.spine.rotation.x += 0.12 * env;
+    }
     g.updateMatrix();
 
     // Hands to the gun (the off hand leaves it for throws, casts, slams and planting)

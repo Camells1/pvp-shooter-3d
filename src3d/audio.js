@@ -54,7 +54,9 @@ const GUNS = {
   ar: (d, t) => { noise(d, t, 0.16, 3800, 250, 0.6, 'lowpass', 1.2); tone(d, t, 0.1, 160, 50, 'triangle', 0.8); noise(d, t, 0.03, 7000, 4000, 1, 'highpass', 0.5); },
   scout: (d, t) => { noise(d, t, 0.45, 4500, 200, 0.6, 'lowpass', 1.3); tone(d, t, 0.25, 150, 45, 'triangle', 1.0); },
   sniper: (d, t) => { noise(d, t, 0.6, 5000, 150, 0.6, 'lowpass', 1.5); tone(d, t, 0.3, 140, 40, 'triangle', 1.2); noise(d, t, 0.9, 900, 200, 0.4, 'lowpass', 0.4); },
-  lmg: (d, t) => { noise(d, t, 0.13, 3000, 300, 0.6, 'lowpass', 1.2); tone(d, t, 0.09, 140, 50, 'square', 0.3); }
+  lmg: (d, t) => { noise(d, t, 0.13, 3000, 300, 0.6, 'lowpass', 1.2); tone(d, t, 0.09, 140, 50, 'square', 0.3); },
+  // Knife: an airy swish that sweeps up in pitch, with a thin metallic ring
+  knife: (d, t) => { noise(d, t, 0.22, 900, 4200, 2.5, 'bandpass', 0.9); tone(d, t + 0.02, 0.12, 2400, 3100, 'sine', 0.06); }
 };
 
 export const sfx = {
@@ -97,6 +99,8 @@ export const sfx = {
   pickup() { if (!ctx) return; const d = out(0.4), t = ctx.currentTime; tone(d, t, 0.15, 520, 780, 'sine', 0.6); tone(d, t + 0.1, 0.2, 780, 1170, 'sine', 0.6); },
   click() { if (!ctx) return; tone(out(0.2), ctx.currentTime, 0.05, 1200, 900, 'square', 0.3); },
   hover() { if (!ctx) return; tone(out(0.08), ctx.currentTime, 0.03, 1800, 1800, 'sine', 0.3); },
+  // Inspect: a couple of soft handling clicks and a shimmer
+  inspect() { if (!ctx) return; const d = out(0.3), t = ctx.currentTime; noise(d, t, 0.04, 2600, 2000, 6, 'bandpass', 0.6); noise(d, t + 0.9, 0.04, 2200, 1800, 6, 'bandpass', 0.5); tone(d, t + 0.1, 0.8, 1400, 2800, 'sine', 0.05); },
   win() { if (!ctx) return; const d = out(0.45), t = ctx.currentTime; [523, 659, 784, 1046].forEach((f, i) => tone(d, t + i * 0.12, 0.35, f, f, 'triangle', 0.5)); },
   lose() { if (!ctx) return; const d = out(0.45), t = ctx.currentTime; [392, 330, 262].forEach((f, i) => tone(d, t + i * 0.18, 0.4, f, f * 0.98, 'triangle', 0.5)); }
 };

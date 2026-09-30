@@ -41,7 +41,7 @@ export class Hud {
         <div class="ammo"><span class="ammo-cur">12</span><span class="ammo-mag">/ 12</span></div>
         <div class="reload-bar"><i></i></div>
         <div class="wep-name"></div>
-        <div class="wep-slots"><div class="slot" data-s="primary"><span>1</span><em></em></div><div class="slot" data-s="sidearm"><span>2</span><em></em></div></div>
+        <div class="wep-slots"><div class="slot" data-s="primary"><span>1</span><em></em></div><div class="slot" data-s="sidearm"><span>2</span><em></em></div><div class="slot" data-s="melee"><span>3</span><em>Knife</em></div></div>
       </div>
       <div class="scoreboard-live"></div>
       <div class="dmg-nums"></div>`;
@@ -60,7 +60,7 @@ export class Hud {
       shRow: q('.sh-row'), shFill: q('.sh-bar i'), shNum: q('.sh-num'),
       abil: q('.abilities'),
       credits: q('.credits span'), ammoCur: q('.ammo-cur'), ammoMag: q('.ammo-mag'), reload: q('.reload-bar'), reloadFill: q('.reload-bar i'),
-      wepName: q('.wep-name'), slotP: q('.slot[data-s=primary]'), slotS: q('.slot[data-s=sidearm]'), nums: q('.dmg-nums'),
+      wepName: q('.wep-name'), slotP: q('.slot[data-s=primary]'), slotS: q('.slot[data-s=sidearm]'), slotM: q('.slot[data-s=melee]'), nums: q('.dmg-nums'),
       board: q('.scoreboard-live')
     };
     this.plateEls = new Map(); this.markerEls = new Map();
@@ -118,12 +118,12 @@ export class Hud {
     this.set('sh', Math.ceil(s.shield), v => { e.shRow.style.opacity = v > 0 ? 1 : 0; e.shFill.style.transform = `scaleX(${Math.min(1, v / 50)})`; e.shNum.textContent = v > 0 ? `+${v}` : ''; });
 
     this.set('credits', s.credits, v => { e.credits.textContent = typeof v === 'number' ? v.toLocaleString() : v; });
-    this.set('ammo', s.ammo + '/' + s.mag, () => { e.ammoCur.textContent = s.ammo; e.ammoMag.textContent = '/ ' + s.mag; e.ammoCur.classList.toggle('low', s.ammo <= Math.ceil(s.mag * 0.25)); });
+    this.set('ammo', s.slot === 'melee' ? 'melee' : s.ammo + '/' + s.mag, () => { if (s.slot === 'melee') { e.ammoCur.textContent = '∞'; e.ammoMag.textContent = ''; e.ammoCur.classList.remove('low'); return; } e.ammoCur.textContent = s.ammo; e.ammoMag.textContent = '/ ' + s.mag; e.ammoCur.classList.toggle('low', s.ammo <= Math.ceil(s.mag * 0.25)); });
     this.set('wep', s.weaponName, v => { e.wepName.textContent = v.toUpperCase(); });
     this.set('slots', `${s.slotP}|${s.slotS}|${s.slot}`, () => {
       e.slotP.querySelector('em').textContent = s.slotP || '—';
       e.slotS.querySelector('em').textContent = s.slotS || '—';
-      e.slotP.classList.toggle('on', s.slot === 'primary'); e.slotS.classList.toggle('on', s.slot === 'sidearm');
+      e.slotP.classList.toggle('on', s.slot === 'primary'); e.slotS.classList.toggle('on', s.slot === 'sidearm'); e.slotM.classList.toggle('on', s.slot === 'melee');
       e.slotP.classList.toggle('empty', !s.slotP);
     });
     e.reload.style.opacity = s.reload >= 0 ? 1 : 0;

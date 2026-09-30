@@ -19,7 +19,7 @@ export class Player {
     this.shots = 0; this.hits = 0; this.headshots = 0;
     this.events = [];
     this.skins = {};            // weaponId -> skinId for guns this player buys
-    this.inv = { primary: null, sidearm: this._item('classic') };
+    this.inv = { primary: null, sidearm: this._item('classic'), melee: this._item('knife') };
     this.slot = 'sidearm';
     this.shield = 0;
     this.frozen = false;        // can't move (bots during the buy phase)
@@ -38,7 +38,8 @@ export class Player {
     this.hp = this.char.health;
     this.dead = false;
     this.grounded = false;
-    if (!keepLoadout) { this.inv = { primary: null, sidearm: this._item('classic') }; this.shield = 0; }
+    if (!keepLoadout) { this.inv = { primary: null, sidearm: this._item('classic'), melee: this.inv.melee || this._item('knife') }; this.shield = 0; }
+    this.inv.melee ||= this._item('knife');
     for (const k of ['primary', 'sidearm']) if (this.inv[k]) this.inv[k].ammo = weaponById(this.inv[k].id).mag;
     this.slot = this.inv.primary ? 'primary' : 'sidearm';
     this.fireCd = 0;
@@ -80,7 +81,7 @@ export class Player {
     const s = this.slot;
     const item = this.inv[s];
     if (!item) return null;
-    if (s === 'sidearm' && !this.inv.primary) return null;
+    if (s === 'melee' || (s === 'sidearm' && !this.inv.primary)) return null;
     this.inv[s] = null;
     this.slot = this.inv.primary ? 'primary' : 'sidearm';
     this.reloadT = -1;
@@ -120,7 +121,16 @@ export class Player {
     }
 
     const cur = this.cur;
-    if (this.reloadT >= 0) {
+    if (this.w.melee) {
+      // Knife: no ammo or reload. Left click slashes; right click is the heavy stab.
+      this.reloadT = -1;
+      if (!busy && (input.fire || input.alt) && this.fireCd <= 0) {
+        const heavy = !input.fire;
+        this.fireCd = heavy ? this.w.heavyRate : this.w.rate;
+        this.cloakT = 0;
+        onFire?.(this, false, heavy);
+      }
+    } else if (this.reloadT >= 0) {
       this.reloadT -= dt * (this.overclockT > 0 ? 4 : 1);
       if (this.reloadT < 0) { cur.ammo = this.w.mag; this.reloadT = -1; this.events.push({ type: 'reloaded' }); }
     } else if (!this.frozen && ((input.reload && cur.ammo < this.w.mag) || cur.ammo === 0)) {
@@ -128,7 +138,7 @@ export class Player {
       this.events.push({ type: 'reload' });
     }
 
-    if (!busy && input.fire && this.fireCd <= 0 && this.reloadT < 0 && cur.ammo > 0) {
+    if (!busy && !this.w.melee && input.fire && this.fireCd <= 0 && this.reloadT < 0 && cur.ammo > 0) {
       this.fireCd = this.w.rate * (this.overclockT > 0 ? 0.5 : 1);
       cur.ammo--;
       this.shots++;

@@ -101,6 +101,9 @@ export class MenuStage {
     this.gunGroup.add(holder);
   }
 
+  // Store / locker Inspect button: flip the gun around once (animated skins flare at the same time)
+  inspectGun() { this.inspectT = 0; }
+
   setMode(mode, me, enemy) {
     this.mode = mode;
     if (me) this.sel.me = me;
@@ -111,7 +114,19 @@ export class MenuStage {
     this.t += dt;
     const ids = CHARACTERS.map(c => c.id);
     const targets = {};
-    if (this.gunGroup) { this.gunGroup.visible = this.mode === 'gun'; this.gunGroup.rotation.y = -Math.PI / 2 + Math.sin(this.t * 0.6) * 0.45; this.gunGroup.rotation.x = Math.sin(this.t * 0.5) * 0.1; }
+    if (this.gunGroup) {
+      this.gunGroup.visible = this.mode === 'gun';
+      this.gunGroup.rotation.set(Math.sin(this.t * 0.5) * 0.1, -Math.PI / 2 + Math.sin(this.t * 0.6) * 0.45, 0);
+      this.gunGroup.position.y = 1.45;
+      if (this.inspectT !== undefined && this.inspectT < 2.4) {
+        this.inspectT += dt;
+        const k = Math.min(1, this.inspectT / 2.4), e = k * k * k * (k * (6 * k - 15) + 10), env = Math.sin(k * Math.PI);
+        this.gunGroup.rotation.y += e * Math.PI * 2;             // full turn
+        this.gunGroup.rotation.z = Math.sin(k * Math.PI * 2) * 0.35 * env;
+        this.gunGroup.rotation.x += env * 0.5;                    // tip the top toward you
+        this.gunGroup.position.y += env * 0.08;
+      }
+    }
     if (this.mode === 'gun') {
       ids.forEach(id => { targets[id] = { x: 0, z: -14, rot: 0, show: false }; });
       this.camPos.set(0, 1.55, 5.6);

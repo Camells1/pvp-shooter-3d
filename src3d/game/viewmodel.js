@@ -1,14 +1,14 @@
 // First-person viewmodel: hands + gun rendered in their own pass so they never clip into walls.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { disposeMerged, buildGun, SIDEARMS, getArmorDetail, loft, pod, band, grow } from './models.js';
+import { disposeMerged, buildGun, SIDEARMS, getArmorDetail, loft, pod, band, grow, keyed, INSPECT_GUN, INSPECT_KNIFE, SLASH, STAB } from './models.js';
 import { weaponById } from './data.js';
 import { reloadAnim, makePropMesh } from './reload.js';
 
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0), _q = new THREE.Quaternion();
 
 // Hip positions in camera space (x right, y up, -z forward). ADS is computed per gun from its sight.
-const HIP = { primary: [0.23, -0.24, -0.66], sidearm: [0.2, -0.2, -0.52] };
+const HIP = { primary: [0.23, -0.24, -0.66], sidearm: [0.2, -0.2, -0.52], knife: [0.22, -0.17, -0.46] };
 // Farther from the eye = the sight takes up less of the screen
 const EYE_RELIEF = { holo: 0.5, iron: 0.46, scope: 0.4 };
 
@@ -91,7 +91,7 @@ export class ViewModel {
 
   // One-shot first-person animations: 'throw' | 'cast' | 'slam' | 'dash' | 'blink' | 'brace' | 'rocket' | 'inspect'
   play(kind) {
-    const DUR = { throw: 0.55, cast: 0.7, slam: 0.8, dash: 0.3, blink: 0.35, brace: 0.6, rocket: 0.6, inspect: 2.4 };
+    const DUR = { throw: 0.55, cast: 0.7, slam: 0.8, dash: 0.3, blink: 0.35, brace: 0.6, rocket: 0.6, inspect: 2.4, slash: 0.42, stab: 0.75 };
     if (DUR[kind]) this.act = { kind, t: 0, dur: DUR[kind] };
   }
   cancelInspect() { if (this.act?.kind === 'inspect') this.act = null; }
@@ -125,7 +125,8 @@ export class ViewModel {
     this.camera.updateProjectionMatrix();
     this.adsT += ((s.ads ? 1 : 0) - this.adsT) * Math.min(1, dt * 14);
 
-    const hip = HIP[SIDEARMS.has(this.weaponId) ? 'sidearm' : 'primary'];
+    const knife = this.weaponId === 'knife';
+    const hip = HIP[knife ? 'knife' : SIDEARMS.has(this.weaponId) ? 'sidearm' : 'primary'];
     const ads = this.adsPos || hip;
     const a = this.adsT;
     const target = this.bobAmt;
@@ -153,17 +154,18 @@ export class ViewModel {
     const hy = hip[1] + (ads[1] - hip[1]) * a + lift * 0.17;
     const hz = hip[2] + (ads[2] - hip[2]) * a;
     const breathe = Math.sin(this.t * 1.6) * 0.003 * (1 - a);
-    const insp = act === 'inspect' ? env : 0;
+    // Keyframed inspect (per weapon kind) and knife attacks
+    const K = act === 'inspect' ? keyed(knife ? INSPECT_KNIFE : INSPECT_GUN, k) : act === 'slash' ? keyed(SLASH, k) : act === 'stab' ? keyed(STAB, k) : null;
     this.gunHolder.position.set(
-      hx + Math.sin(this.t * bobF) * 0.012 * bob - this.sway.x - insp * 0.16 + (act === 'dash' ? 0.03 * env : 0),
-      hy + Math.abs(Math.cos(this.t * bobF)) * 0.012 * bob + this.sway.y + (R ? R.pose.dy * 1.6 : 0) - this.switchT * 0.25 - this.landT * 0.03 + breathe - lower * 0.22 + insp * 0.06 - this.hitT * 0.02,
-      hz + this.recoil * 0.05 + insp * 0.12 + this.hitT * 0.03
+      hx + Math.sin(this.t * bobF) * 0.012 * bob - this.sway.x + (K ? K[0] : 0) + (act === 'dash' ? 0.03 * env : 0),
+      hy + Math.abs(Math.cos(this.t * bobF)) * 0.012 * bob + this.sway.y + (R ? R.pose.dy * 1.6 : 0) - this.switchT * 0.25 - this.landT * 0.03 + breathe - lower * 0.22 + (K ? K[1] : 0) - this.hitT * 0.02,
+      hz + this.recoil * 0.05 + (K ? K[2] : 0) + this.hitT * 0.03
     );
     // Angle the muzzle toward the crosshair at the hip so you see the side of the gun
     this.gunHolder.rotation.set(
-      this.recoil * 0.12 + (R ? R.pose.up * 1.2 : 0) - this.switchT * 0.6 - lower * 0.5 + this.hitT * 0.08,
-      this.sway.x * 2 + 0.07 * (1 - a) + insp * 1.3,
-      (R ? R.pose.roll : 0) - 0.04 * (1 - a) + Math.sin(this.t * bobF * 0.5) * 0.01 * bob - insp * 0.55 + (act === 'dash' || act === 'blink' ? 0.35 * env : 0));
+      this.recoil * 0.12 + (R ? R.pose.up * 1.2 : 0) - this.switchT * 0.6 - lower * 0.5 + this.hitT * 0.08 + (K ? K[3] : 0) + (knife ? 0.12 : 0),
+      this.sway.x * 2 + 0.07 * (1 - a) + (K ? K[4] : 0) + (knife ? 0.25 : 0),
+      (R ? R.pose.roll : 0) - 0.04 * (1 - a) + Math.sin(this.t * bobF * 0.5) * 0.01 * bob + (K ? K[5] : 0) + (act === 'dash' || act === 'blink' ? 0.35 * env : 0));
     this.gunHolder.updateMatrix();
 
     // Scoped sniper: hide the viewmodel while looking through the scope
@@ -182,6 +184,7 @@ export class ViewModel {
       if (act === 'throw') { off = k < 0.4 ? new THREE.Vector3(-0.28, 0.02, -0.12) : new THREE.Vector3(-0.04, 0.05, -0.75); w = Math.min(1, env * 1.8); }
       if (act === 'slam') { off = new THREE.Vector3(-0.12, -0.38, -0.5); w = Math.min(1, env * 1.8); }
       if (this.kneel > 0.05 && !off) { off = new THREE.Vector3(-0.08, -0.34, -0.48); w = this.kneel; }
+      if (knife && !off) { off = new THREE.Vector3(-0.2, -0.24 + Math.sin(this.t * 1.6) * 0.004, -0.46); w = 1; }   // off hand up in a guard
       if (off) fore.lerp(off, w);
       this._place(this.limbs[0], grip, new THREE.Vector3(0.5, -0.6, 0.1));
       this._place(this.limbs[1], fore, new THREE.Vector3(-0.25, -0.65, 0.0));
