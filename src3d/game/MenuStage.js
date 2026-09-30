@@ -144,10 +144,10 @@ export class MenuStage {
       const half = (n - 1) / 2 * 0.185;
       const edgeX = Math.sin(half) * 10 + 0.9, edgeZ = 10 - Math.cos(half) * 10; // outermost pedestal: how far out, how much closer to the camera
       const dW = edgeZ + edgeX / (tanH * 0.94);      // width: use 94% of the screen
-      const dH = 2.5 / (2 * tanV * 0.42);            // height: fighters take ~42% of the screen
+      const dH = 2.5 / (2 * tanV * 0.3);             // height: fighters take ~30% of the screen
       const d = Math.max(dW, dH, 7);
-      // Keep the fighters in the band between the logo (top) and the buttons (bottom)
-      const lookY = 1.25 - 0.1 * 2 * d * tanV;
+      // Keep the fighters in the band between the logo (top) and the buttons (bottom), clear of both
+      const lookY = 1.0 - 0.07 * 2 * d * tanV;
       this.camPos.set(Math.sin(this.t * 0.12) * 0.4, lookY + 0.9, d);
       this.camLook.set(0, lookY, 0);
     } else {

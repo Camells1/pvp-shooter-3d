@@ -6,9 +6,15 @@ import { weaponById } from './data.js';
 import { reloadAnim, makePropMesh } from './reload.js';
 
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0), _q = new THREE.Quaternion();
+const WRIST = 0.07;
+const _m1 = new THREE.Matrix4(), _m2 = new THREE.Matrix4(), _q2 = new THREE.Quaternion(), _c = new THREE.Vector3(), _d = new THREE.Vector3(), _e = new THREE.Vector3();
+const _X = new THREE.Vector3(), _Y = new THREE.Vector3(), _Z = new THREE.Vector3(), _one = new THREE.Vector3(1, 1, 1);
+// Knife grip, in hand space: the handle runs across the curled fingers (hand X), the blade leaves the thumb side,
+// the spine faces the palm. HANDLE is the point on the handle axis the fingers close round (hand space).
+const HANDLE = new THREE.Vector3(0.0, -0.032, -0.04), KNIFE_HANDLE = new THREE.Vector3(0, -0.072, 0.022);
 
 // Hip positions in camera space (x right, y up, -z forward). ADS is computed per gun from its sight.
-const HIP = { primary: [0.23, -0.24, -0.66], sidearm: [0.2, -0.2, -0.52], knife: [0.22, -0.17, -0.46] };
+const HIP = { primary: [0.23, -0.24, -0.66], sidearm: [0.2, -0.2, -0.52], knife: [0.19, -0.115, -0.42] };
 // Farther from the eye = the sight takes up less of the screen
 const EYE_RELIEF = { holo: 0.5, iron: 0.46, scope: 0.4 };
 
@@ -64,17 +70,26 @@ export class ViewModel {
       for (let k = 0; k < 3; k++) box(0.05, 0.005, 0.008, 0.0025, glove, 0, -0.047, 0.19 + k * 0.03, fore);
       L([[0.098, 0.04, 0.04], [0.122, 0.038, 0.038]], trim, { n: 2.4, seg: 20, b: 0.004 });                       // wrist cuff
       L([[0.312, 0.049, 0.048], [0.33, 0.047, 0.046]], sleeveDark, { n: 2.5, seg: 20, b: 0.004 });               // elbow-side cuff
-      // Gloved hand: palm, back-of-hand plate, four curled fingers, thumb
-      const palm = new THREE.Mesh(pod(0.036, 0.026, 0.04, { n: 3, nv: 3, seg: 20 }), glove); fore.add(palm);
-      box(0.06, 0.012, 0.05, 0.005, trim, 0, 0.03, 0.006, fore);               // knuckle plate
+      // Gloved hand on its own wrist joint (so it can turn to hold a knife while the forearm points at the elbow).
+      // The hand group sits at the wrist; its contents are shifted so the palm centre stays at the forearm origin.
+      const wrist = new THREE.Group(); wrist.position.z = WRIST; fore.add(wrist);
+      const hand = new THREE.Group(); hand.position.z = -WRIST; wrist.add(hand);
+      const palm = new THREE.Mesh(pod(0.036, 0.026, 0.04, { n: 3, nv: 3, seg: 20 }), glove); hand.add(palm);
+      box(0.06, 0.012, 0.05, 0.005, trim, 0, 0.03, 0.006, hand);               // knuckle plate
+      // Fingers: knuckle and middle joints so they can curl round a handle and open while a knife spins
+      const fingers = [];
       for (let f = 0; f < 4; f++) {
         const x = -0.027 + f * 0.018, len = f === 0 || f === 3 ? 0.03 : 0.036;
-        box(0.016, 0.018, len, 0.006, glove, x, 0.0, -0.05 - len / 2 + 0.014, fore);
-        const tip = box(0.015, 0.016, 0.028, 0.006, glove, x, -0.02, -0.072 - len * 0.4, fore);
-        tip.rotation.x = 0.7;
+        const kn = new THREE.Group(); kn.position.set(x, 0, -0.036); hand.add(kn);
+        box(0.016, 0.018, len, 0.006, glove, 0, 0, -len / 2, kn);
+        const mid = new THREE.Group(); mid.position.z = -len; kn.add(mid);
+        box(0.015, 0.016, 0.028, 0.006, glove, 0, -0.002, -0.012, mid);
+        fingers.push({ kn, mid });
       }
-      const thumb = box(0.02, 0.02, 0.05, 0.007, glove, 0.04 * th, 0.006, -0.03, fore);
-      thumb.rotation.y = -0.45 * th;
+      const thumbJ = new THREE.Group(); thumbJ.position.set(0.03 * th, 0.004, -0.012); hand.add(thumbJ);
+      box(0.02, 0.02, 0.05, 0.007, glove, 0.01 * th, 0.002, -0.018, thumbJ);
+      fore.userData = { wrist, fingers, thumbJ, th };
+      this._curl(fore, 0);
       this.arms.add(fore);
       this.limbs.push(fore);
     }
@@ -186,7 +201,11 @@ export class ViewModel {
       if (this.kneel > 0.05 && !off) { off = new THREE.Vector3(-0.08, -0.34, -0.48); w = this.kneel; }
       if (knife && !off) { off = new THREE.Vector3(-0.2, -0.24 + Math.sin(this.t * 1.6) * 0.004, -0.46); w = 1; }   // off hand up in a guard
       if (off) fore.lerp(off, w);
-      this._place(this.limbs[0], grip, new THREE.Vector3(0.5, -0.6, 0.1));
+      if (knife) {
+        // K[6] is the twirl angle; the fingers open while the knife is turning
+        const spin = K && K.length > 6 ? K[6] : 0, open = Math.abs(Math.sin(spin / 2)) ** 0.6;
+        this._knifeHand(this.limbs[0], _a.set(0.4, -0.62, 0.14), spin, open);
+      } else this._place(this.limbs[0], grip, new THREE.Vector3(0.5, -0.6, 0.1));
       this._place(this.limbs[1], fore, new THREE.Vector3(-0.25, -0.65, 0.0));
       const pr = this.prop;
       pr.visible = !!(R && R.prop);
@@ -200,7 +219,50 @@ export class ViewModel {
     }
   }
 
+  // Finger pose: 0 = relaxed gun grip, 1 = fist closed round a knife handle; open (0..1) loosens it mid-twirl
+  _curl(limb, grip, open = 0) {
+    const u = limb.userData;
+    u.fingers.forEach(({ kn, mid }, i) => {
+      const g = grip * (1 - open * (0.75 + i * 0.05));
+      kn.rotation.x = -(0.1 + 1.05 * g);
+      mid.rotation.x = -(0.85 + 0.55 * g);
+    });
+    const tg = grip * (1 - open * 0.6);
+    u.thumbJ.rotation.set(-0.15 - 0.55 * tg, (-0.45 + 0.1 * tg) * u.th, 0.5 * tg * u.th);
+  }
+
+  // Knife hand: the holder pose says where the knife is and where the blade points. The fist closes round the
+  // handle (handle across the fingers, blade out of the thumb side), the hand turns at the wrist toward the forearm,
+  // and the forearm aims at the elbow. 'spin' twirls the knife in the fingers about its side axis; 'open' loosens them.
+  _knifeHand(limb, elbowOff, spin, open) {
+    const gun = this.gun;
+    gun.position.set(0, 0, 0); gun.quaternion.setFromAxisAngle(_up, Math.PI); gun.updateMatrix();
+    _m1.multiplyMatrices(this.gunHolder.matrix, gun.matrix);                     // the knife, rig space
+    const hc = _c.copy(KNIFE_HANDLE).applyMatrix4(_m1);                          // where the fist closes on the handle
+    _X.set(0, 0, -1).transformDirection(_m1);                                     // hand X runs back along the handle (blade leaves the thumb side)
+    _Z.copy(elbowOff).normalize(); _Z.addScaledVector(_X, -_Z.dot(_X)).normalize(); // hand Z (toward the wrist) as close to the forearm as the grip allows
+    _Y.crossVectors(_Z, _X);
+    _m2.makeBasis(_X, _Y, _Z);
+    _q.setFromRotationMatrix(_m2);
+    const palm = hc.sub(_d.copy(HANDLE).applyQuaternion(_q));
+    const wristPt = _e.set(0, 0, WRIST).applyQuaternion(_q).add(palm);
+    const fdir = _d.copy(palm).add(elbowOff).sub(wristPt).normalize();
+    _q2.setFromUnitVectors(_Z.set(0, 0, 1), fdir);
+    limb.quaternion.copy(_q2);
+    limb.position.copy(wristPt).sub(_Z.set(0, 0, WRIST).applyQuaternion(_q2));
+    limb.userData.wrist.quaternion.copy(_q2).invert().multiply(_q);
+    this._curl(limb, 1, open);
+    // Twirl: spin the knife about its side axis through the handle point in the fist
+    if (spin) {
+      const p = KNIFE_HANDLE;
+      _m2.makeTranslation(p.x, p.y, p.z).multiply(new THREE.Matrix4().makeRotationX(spin)).multiply(new THREE.Matrix4().makeTranslation(-p.x, -p.y, -p.z));
+      _m2.premultiply(gun.matrix);
+      _m2.decompose(gun.position, gun.quaternion, gun.scale);
+    }
+  }
+
   _place(limb, hand, elbow) {
+    if (limb.userData.wrist) { limb.userData.wrist.quaternion.identity(); this._curl(limb, 0); }
     limb.position.copy(hand);
     const dir = elbow.clone().sub(hand).normalize();
     _q.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
