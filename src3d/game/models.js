@@ -731,6 +731,7 @@ function shieldMaterial(color) {
 const _v = new THREE.Vector3(), _t = new THREE.Vector3(), _p = new THREE.Vector3(), _n = new THREE.Vector3();
 const _x = new THREE.Vector3(), _y = new THREE.Vector3(), _z = new THREE.Vector3(), _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion(), DOWN = new THREE.Vector3(0, -1, 0);
+const _mi = new THREE.Matrix4(), _f = new THREE.Vector3(), _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion(), _e = new THREE.Euler();
 
 export class CharacterModel {
   constructor(char) {
@@ -802,18 +803,20 @@ export class CharacterModel {
       L([[-0.08, 0.07, 0.074], [-0.16, 0.074, 0.08], [-0.3, 0.06, 0.062]], M.armorDark, knee, { n: 2.4, arc: [0.6, 0.9], t: 0.01 }); // calf plate
       glowCap(0.0045, 0.13, 0, -0.22, 0.083, knee);                                                                  // shin light
       L([[-0.395, 0.059, 0.061], [-0.42, 0.056, 0.058]], M.trim, knee, { n: 2.4, b: 0.004 });                          // ankle band
-      // Boot, lofted heel to toe (local Y runs backwards along the foot, local Z is up)
+      // Boot on its own ankle joint so it can stay flat on the ground (lofted heel to toe: local Y runs backwards along the foot, local Z is up)
+      const ankle = new THREE.Group(); ankle.position.y = -0.44; knee.add(ankle);
       const bootR = (zs) => zs.map(([z, w, h, y]) => [-z, w, h, y]);
       const foot = L(bootR([[-0.095, 0.05, 0.04, 0.005], [-0.08, 0.064, 0.05, 0.005], [0.0, 0.074, 0.056, 0.0], [0.09, 0.072, 0.046, -0.01], [0.16, 0.064, 0.036, -0.02], [0.2, 0.05, 0.026, -0.028]]),
-        M.trim, knee, { n: 2.6, b: 0.01 }, 0, -0.47, 0.05);
+        M.trim, ankle, { n: 2.6, b: 0.01 }, 0, -0.03, 0.05);
       foot.rotation.x = -HP;
       L(bootR([[-0.1, 0.056, 0.012, 0], [-0.085, 0.07, 0.013, 0], [0.1, 0.076, 0.013, 0], [0.19, 0.062, 0.012, 0], [0.215, 0.04, 0.01, 0]]),
-        M.rubber, knee, { n: 4, b: 0.005 }, 0, -0.515, 0.05).rotation.x = -HP;                                         // sole
+        M.rubber, ankle, { n: 4, b: 0.005 }, 0, -0.075, 0.05).rotation.x = -HP;                                        // sole
       L(bootR([[0.07, 0.078, 0.054, -0.006], [0.14, 0.07, 0.044, -0.016], [0.19, 0.058, 0.034, -0.024], [0.205, 0.05, 0.028, -0.028]]),
-        M.armor, knee, { n: 2.6, arc: [0.02, 0.48], t: 0.01 }, 0, -0.47, 0.05).rotation.x = -HP;                      // toe cap
-      P(0.054, 0.034, 0.03, M.armorDark, 0, -0.49, -0.035, knee, { nv: 2.6, n: 2.6 });                              // heel
-      glowCap(0.005, 0.08, 0.075 * s, -0.48, 0.06, knee, 'z');                                                      // boot light
-      this.legs.push({ leg, knee, foot, side: s });
+        M.armor, ankle, { n: 2.6, arc: [0.02, 0.48], t: 0.01 }, 0, -0.03, 0.05).rotation.x = -HP;                     // toe cap
+      P(0.054, 0.034, 0.03, M.armorDark, 0, -0.05, -0.035, ankle, { nv: 2.6, n: 2.6 });                             // heel
+      glowCap(0.005, 0.08, 0.075 * s, -0.04, 0.06, ankle, 'z');                                                     // boot light
+      leg.rotation.order = 'ZXY'; // swing in the leg's plane first, then tilt that plane sideways (see _legIK)
+      this.legs.push({ leg, knee, ankle, foot, side: s, target: new THREE.Vector3(0.125 * s, 0.088, 0), pitch: 0, loose: 0 });
     }
 
     // ---------------- Spine / abdomen
@@ -1130,8 +1133,26 @@ export class CharacterModel {
     arm.elbow.quaternion.setFromUnitVectors(DOWN, _p);
   }
 
+  // Two-bone leg IK: F is the ankle target relative to the hip joint, in hips space. The thigh swings in its own
+  // plane (leg X), that plane tilts sideways (leg Z, order ZXY), and the ankle turns the boot to the wanted pitch.
+  _legIK(L, F, pitch, loose = 0) {
+    const L1 = 0.44, L2 = 0.44;
+    const dd = Math.hypot(F.x, F.y), az = Math.atan2(F.x, -F.y);
+    const D = THREE.MathUtils.clamp(Math.hypot(F.z, dd), 0.12, L1 + L2 - 0.001);
+    const bend = Math.PI - Math.acos(THREE.MathUtils.clamp((L1 * L1 + L2 * L2 - D * D) / (2 * L1 * L2), -1, 1));
+    const a = Math.atan2(F.z, dd), b = Math.acos(THREE.MathUtils.clamp((L1 * L1 + D * D - L2 * L2) / (2 * L1 * D), -1, 1));
+    L.leg.rotation.set(-(a + b), 0, az);
+    L.knee.rotation.set(bend, 0, 0);
+    // Boot flat to the body (yaw and roll undone), pitched by the gait: ankle = (hips * leg * knee)^-1 * pitch
+    _qa.copy(this.hips.quaternion).multiply(L.leg.quaternion).multiply(L.knee.quaternion).invert();
+    _qb.setFromEuler(_e.set(pitch, 0, 0));
+    L.ankle.quaternion.copy(_qa).multiply(_qb);
+    const w = 0.6 * loose * THREE.MathUtils.clamp((bend - 0.6) / 0.8, 0, 1);
+    if (w > 0) L.ankle.quaternion.slerp(_qb.setFromEuler(_e.set(0.5, 0, 0)), w);
+  }
+
   /**
-   * s: { vx, vz, yaw, pitch, grounded, dead, reload (0..1 or -1), shield, ghostAlpha }
+   * s: { vx, vz, yaw, pitch, grounded, dead, reload (0..1 or -1), shield, kneel, crouch (0..1), ghostAlpha }
    */
   update(dt, s) {
     this.time += dt;
@@ -1143,38 +1164,87 @@ export class CharacterModel {
     const fwd = -(s.vx * sin + s.vz * cos);        // along facing
     const side = s.vx * cos - s.vz * sin;           // along right
     const speed = Math.hypot(s.vx, s.vz);
-    const target = s.grounded ? Math.min(1, speed / 5) : 0;
+    const cr = s.crouch || 0;
+    const target = s.grounded ? Math.min(1, speed / 2.5) : 0;
     this.moveAmt += (target - this.moveAmt) * Math.min(1, dt * 10);
     this.airAmt += ((s.grounded ? 0 : 1) - this.airAmt) * Math.min(1, dt * 8);
-    this.phase += speed * dt * 1.9;
-
-    const ph = this.phase, amt = this.moveAmt;
+    this.kneelAmt = (this.kneelAmt || 0) + ((s.kneel ? 1 : 0) - (this.kneelAmt || 0)) * Math.min(1, dt * 8);
+    const amt = this.moveAmt, air = this.airAmt, kn = this.kneelAmt;
     const fdir = speed > 0.1 ? fwd / speed : 1, sdir = speed > 0.1 ? side / speed : 0;
-    const swing = Math.sin(ph) * 0.7 * amt;
+
+    // Gait: the phase advances with distance, so a planted foot slides back exactly as fast as the body moves
+    const run = THREE.MathUtils.clamp((speed - 3) / 3.5, 0, 1) * (1 - cr);
+    const cyc = 0.9 + speed * 0.26;                                   // metres per full stride (two steps)
+    this.phase = (this.phase + speed * dt / cyc) % 1;
+    const Rs = 0.3 + 0.12 * run + 0.06 * cr;                          // half the foot's travel (longer when low)
+    const duty = THREE.MathUtils.clamp(2 * Rs / cyc, 0.3, 0.65);       // share of the stride a foot is planted
+    const lift = (0.08 + 0.16 * run) * (1 - cr * 0.4);
+    const lat = Math.abs(sdir);
+    const mx = -sdir * (1 - 0.35 * lat), mz = fdir;                   // shorter steps when strafing so the feet never cross
+    const pitchK = (0.3 + 0.7 * Math.max(0, fdir)) * amt;             // heel-toe roll mostly when going forwards
+    const tL = this.phase;
     for (const L of this.legs) {
-      const sgn = L.side === 1 ? 1 : -1;
-      const sw = swing * sgn;
-      L.leg.rotation.x = -sw * fdir - this.airAmt * (L.side === 1 ? 0.7 : 0.25);
-      L.leg.rotation.z = sw * sdir * 0.45 * -1 + 0.04 * L.side;
-      const kb = Math.max(0, Math.sin(ph * 1 + (L.side === 1 ? Math.PI / 2 : -Math.PI / 2))) * 1.1 * amt;
-      L.knee.rotation.x = kb + 0.08 + this.airAmt * (L.side === 1 ? 1.1 : 0.5);
+      const sd = L.side, t = (tL + (sd > 0 ? 0 : 0.5)) % 1;
+      let off, up = 0, pitch, loose = 0;
+      if (t < duty) {                                                  // planted: heel strike, roll through, push off the toe
+        const tt = t / duty;
+        off = Rs * (1 - 2 * tt);
+        pitch = -0.22 * Math.max(0, 1 - tt * 4) ** 2 + 0.45 * Math.max(0, (tt - 0.6) / 0.4) ** 2;
+      } else {                                                         // swinging through
+        const u = (t - duty) / (1 - duty), e = u * u * (3 - 2 * u);
+        off = -Rs + 2 * Rs * e;
+        up = lift * Math.sin(Math.PI * Math.pow(u, 0.75));
+        pitch = 0.45 * (1 - u) ** 2 - 0.22 * u ** 3;
+        loose = Math.sin(Math.PI * Math.min(1, u * 1.4));
+      }
+      pitch *= pitchK;
+      // Idle stance (wider and staggered when crouched) blended into the stepping stance
+      const ix = sd * (0.125 + 0.035 * cr), iz = (sd > 0 ? 0.04 : -0.04) + (sd > 0 ? 0.1 : -0.13) * cr;
+      const gx = sd * (0.125 + 0.07 * lat) + mx * off, gz = mz * off;
+      let fx = ix + (gx - ix) * amt, fz = iz + (gz - iz) * amt, fy = up * amt;
+      pitch += (sd > 0 ? 0 : 0.35 * cr) * (1 - amt);                   // back heel up in a crouch
+      // Keep the toe or heel on the floor as the foot rolls
+      fy += pitch > 0 ? 0.24 * Math.sin(pitch) : 0.06 * Math.sin(-pitch);
+      fz -= pitch > 0 ? 0.24 * (1 - Math.cos(pitch)) : 0;
+      // Airborne: tuck one knee up
+      fx += (sd * 0.13 - fx) * air; fz += ((sd > 0 ? 0.18 : -0.1) - fz) * air; fy += ((sd > 0 ? 0.34 : 0.22) - fy) * air;
+      pitch += ((sd > 0 ? 0.25 : 0.5) - pitch) * air;
+      // Kneel: left foot planted forward, right knee down with the toe tucked
+      if (kn > 0.001) {
+        const kx = sd > 0 ? 0.14 : -0.12, kz = sd > 0 ? 0.3 : -0.36, kp = sd > 0 ? 0 : 0.9;
+        const ky = 0.24 * Math.sin(kp);
+        fx += (kx - fx) * kn; fy += (ky - fy) * kn; fz += (kz - fz) * kn; pitch += (kp - pitch) * kn;
+      }
+      L.target.set(fx, fy + 0.088, fz); L.pitch = pitch;
+      L.loose = Math.max(loose * amt, air * 0.7) * (1 - kn);             // a lifted foot hangs from the shin instead of staying level
     }
-    const bob = Math.abs(Math.cos(ph)) * 0.05 * amt;
+
+    // Pelvis: rises through a running stride's flight, shifts over the planted foot, turns with the stride,
+    // and never sits higher than a slightly bent leg can reach the lower foot (that gives the walking dip)
+    const c2 = Math.cos(4 * Math.PI * (tL - duty / 2)), c1 = Math.cos(2 * Math.PI * (tL - duty / 2));
     const breathe = Math.sin(this.time * 2.2) * 0.008;
-    this.hips.position.y = 0.98 - bob + breathe - amt * 0.03;
-    this.hips.rotation.y = Math.sin(ph) * 0.12 * amt * fdir;
-    this.hips.rotation.x = amt * 0.12 * fdir;
-    this.spine.rotation.y = -this.hips.rotation.y;
+    let hy = 0.98 + breathe + amt * run * 0.035 * (1 - c2) / 2 - 0.42 * cr * (1 - kn) - 0.4 * kn;
+    for (const L of this.legs) {
+      const dx = L.target.x - 0.11 * L.side, dz = L.target.z;
+      hy = Math.min(hy, L.target.y + 0.03 + Math.sqrt(Math.max(0, 0.855 * 0.855 - dx * dx - dz * dz)));
+    }
+    const legL = this.legs.find(l => l.side === 1);
+    const fwdL = THREE.MathUtils.clamp((legL.target.z * mz + legL.target.x * mx) / Math.max(Rs, 0.05), -1, 1) * amt * (1 - air);
+    this.hips.position.x = c1 * 0.018 * amt * (1 - cr * 0.5);
+    this.hips.position.y = hy;
+    this.hips.rotation.set(amt * (0.06 + 0.1 * run) * fdir + 0.3 * cr, -0.16 * fwdL * fdir, c1 * 0.05 * amt);
+    this.spine.rotation.y = -this.hips.rotation.y * 0.8;
 
     // Aim pitch spread across spine/chest; head keeps a little
     const p = THREE.MathUtils.clamp(s.pitch, -1.3, 1.3);
-    this.spine.rotation.x = -p * 0.35 - this.hips.rotation.x;
-    this.chest.rotation.x = -p * 0.5;
+    this.spine.rotation.x = -p * 0.35 - this.hips.rotation.x + 0.12 * cr;
+    this.spine.rotation.z = -this.hips.rotation.z * 0.7;
+    this.chest.rotation.x = -p * 0.5 - 0.12 * cr;
     this.neck.rotation.x = -p * 0.15;
     // One-shot animations add to these below, so start from neutral every frame
     this.neck.rotation.y = 0; this.neck.rotation.z = 0;
-    this.chest.rotation.y = 0;
-    this.chest.rotation.z = Math.sin(ph) * 0.04 * amt;
+    this.chest.rotation.y = -this.hips.rotation.y * 0.2;
+    this.chest.rotation.z = -this.hips.rotation.z * 0.3;
 
     // ---- One-shot actions (abilities / gestures)
     let act = null, k = 0, env = 0;
@@ -1185,16 +1255,7 @@ export class CharacterModel {
       act = this.act.kind;
       if (this.act.t >= this.act.dur) this.act = null;
     }
-    // Kneel while planting / defusing
-    this.kneelAmt = (this.kneelAmt || 0) + ((s.kneel ? 1 : 0) - (this.kneelAmt || 0)) * Math.min(1, dt * 8);
-    const kn = this.kneelAmt;
-    if (kn > 0.01) {
-      this.hips.position.y -= 0.4 * kn;
-      const [L0, L1] = this.legs;
-      L0.leg.rotation.x += (-1.25 - L0.leg.rotation.x) * kn; L0.knee.rotation.x += (1.5 - L0.knee.rotation.x) * kn;
-      L1.leg.rotation.x += (0.15 - L1.leg.rotation.x) * kn; L1.knee.rotation.x += (2.1 - L1.knee.rotation.x) * kn;
-      this.spine.rotation.x += 0.35 * kn;
-    }
+    if (kn > 0.01) this.spine.rotation.x += 0.35 * kn;
     // Flinch when hit
     this.flinch = Math.max(0, (this.flinch || 0) - dt * 6);
     if (this.flinch > 0) {
@@ -1210,6 +1271,10 @@ export class CharacterModel {
     }
     if (act === 'throw') this.chest.rotation.y += (k < 0.4 ? 0.45 * k / 0.4 : 0.45 - 1.0 * (k - 0.4) / 0.6) * (k < 0.95 ? 1 : 0);
     if (act === 'inspect') { this.neck.rotation.y -= 0.35 * env; this.neck.rotation.x += 0.25 * env; }
+    // Feet: solve both legs now that the pelvis has settled (targets are in body space, floor at y = 0)
+    this.hips.updateMatrix();
+    _mi.copy(this.hips.matrix).invert();
+    for (const L of this.legs) this._legIK(L, _f.copy(L.target).applyMatrix4(_mi).sub(L.leg.position), L.pitch, L.loose);
     const bs = this.baseScale;
     if (act === 'blink') this.body.scale.set(bs.x * (1 - 0.3 * env), bs.y * (1 + 0.35 * env), bs.z * (1 - 0.3 * env));
     else this.body.scale.copy(bs);

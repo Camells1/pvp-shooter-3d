@@ -12,7 +12,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { weaponById, charById, CHARACTERS, SHIELDS, ECON, ROUND, SPIKE, PICKUP_HEAL, ABILITY_NAMES } from './data.js';
 import { buildMap } from './maps.js';
-import { Player } from './Player.js';
+import { Player, CROUCH_H } from './Player.js';
 import { Bot, Dummy, botShopping } from './Bot.js';
 import { CharacterModel, buildGun, buildSpike, disposeMerged } from './models.js';
 import { Effects } from './effects.js';
@@ -22,6 +22,8 @@ import { sfx } from '../audio.js';
 
 const SEND_HZ = 30;
 const INTERP_DELAY = 100;
+// Left Ctrl crouches only in the desktop app: in a browser tab, Ctrl+W would close the game
+const CTRL_CROUCH = navigator.userAgent.includes('Electron');
 const TEAM_COLORS = ['#3dd6ff', '#ff4a5a'];
 const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3();
 const r3 = v => Math.round(v * 1000) / 1000;
@@ -42,6 +44,7 @@ class RemotePlayer {
     this.dead = false; this.deadOverride = false;
     this.grounded = true; this.weaponId = 'classic'; this.skinId = 'default'; this.shieldOn = false; this.cloaked = false; this.reload = -1; this.ads = false;
     this.snaps = []; this.offset = null; this.hasState = false;
+    this.crouch = false; this.crouchAmt = 0; this.lastUpd = 0;
   }
   get invulnerable() { return this.shieldOn; }
   get reloadProgress() { return this.reload; }
@@ -56,11 +59,16 @@ class RemotePlayer {
     this.snaps.push({ t: m.t, p: m.p, v: m.v, yaw: m.y, pitch: m.pi, dead });
     if (this.snaps.length > 30) this.snaps.shift();
     this.hp = m.hp; this.shield = m.sh || 0; this.weaponId = m.w; this.skinId = m.sk || 'default';
-    this.grounded = !!(m.f & 1); this.shieldOn = !!(m.f & 4); this.ads = !!(m.f & 16); this.cloaked = !!(m.f & 32); this.channeling = !!(m.f & 64);
+    this.grounded = !!(m.f & 1); this.shieldOn = !!(m.f & 4); this.ads = !!(m.f & 16); this.cloaked = !!(m.f & 32); this.channeling = !!(m.f & 64); this.crouch = !!(m.f & 128);
     this.reload = m.rl;
     this.hasState = true;
   }
   update() {
+    // Crouch eases the same way it does on the owner's machine, and moves the hitboxes with it
+    const now = performance.now(), dt = Math.min(0.1, (now - (this.lastUpd || now)) / 1000);
+    this.lastUpd = now;
+    this.crouchAmt += Math.sign((this.crouch ? 1 : 0) - this.crouchAmt) * Math.min(Math.abs((this.crouch ? 1 : 0) - this.crouchAmt), dt * 8);
+    this.h = this.char.height * (1 - (1 - CROUCH_H) * this.crouchAmt);
     if (!this.snaps.length) return;
     const rt = performance.now() - this.offset - INTERP_DELAY;
     const S = this.snaps;
@@ -1381,6 +1389,7 @@ export class Game {
       mz: active ? (K.KeyW ? 1 : 0) - (K.KeyS ? 1 : 0) : 0,
       jump: active && !!K.Space,
       walk: active && !!(K.ShiftLeft || K.ShiftRight),
+      crouch: active && !!(K.KeyC || (CTRL_CROUCH && (K.ControlLeft || K.ControlRight))),
       yaw: this.yaw, pitch: this.pitch,
       fire: active && this.mouse.left,
       ads, reload: active && !!P.KeyR,
@@ -1448,7 +1457,7 @@ export class Game {
         for (const E of this.ents.values()) {
           if (!E.local) continue;
           const s = E.sim;
-          const f = (s.grounded ? 1 : 0) | (s.dead ? 2 : 0) | (s.shieldT > 0 ? 4 : 0) | ((E === me ? ads : false) ? 16 : 0) | (s.cloaked ? 32 : 0) | (s.channeling ? 64 : 0);
+          const f = (s.grounded ? 1 : 0) | (s.dead ? 2 : 0) | (s.shieldT > 0 ? 4 : 0) | ((E === me ? ads : false) ? 16 : 0) | (s.cloaked ? 32 : 0) | (s.channeling ? 64 : 0) | (s.crouching ? 128 : 0);
           list.push({ id: E.id, t: performance.now(), p: [r3(s.pos.x), r3(s.pos.y), r3(s.pos.z)], v: [r3(s.vel.x), r3(s.vel.y), r3(s.vel.z)], y: r3(s.yaw), pi: r3(s.pitch), w: s.weaponId, sk: s.skinId, f, rl: r3(s.reloadProgress), hp: Math.ceil(s.hp), sh: Math.ceil(s.shield) });
         }
         this.net.send({ type: 'S', list });
@@ -1461,7 +1470,7 @@ export class Game {
       const st = E.st, m = E.model;
       m.root.position.set(st.pos.x, st.pos.y, st.pos.z);
       m.setWeapon(st.weaponId, E.local ? E.sim.skinId : E.remote.skinId);
-      m.update(dt, { vx: st.vel.x, vz: st.vel.z, yaw: st.yaw, pitch: st.pitch, grounded: st.grounded, dead: !E.alive || st.dead, reload: st.reloadProgress, shield: E.local ? st.shieldT > 0 : st.shieldOn, kneel: E.local ? E.sim.channeling : E.remote.channeling });
+      m.update(dt, { vx: st.vel.x, vz: st.vel.z, yaw: st.yaw, pitch: st.pitch, grounded: st.grounded, dead: !E.alive || st.dead, reload: st.reloadProgress, shield: E.local ? st.shieldT > 0 : st.shieldOn, kneel: E.local ? E.sim.channeling : E.remote.channeling, crouch: st.crouchAmt || 0 });
       m.setShadow(this.camera.position.distanceToSquared(m.root.position) < 1600);
       const cloaked = E.local ? E.sim.cloaked : E.remote.cloaked;
       const hideCloak = cloaked && E.team !== this.myTeam;
@@ -1498,7 +1507,7 @@ export class Game {
       pk.item.rotation.y += dt * 1.5;
     }
 
-    this.stepAcc += ms.grounded && me.alive && !input.walk ? Math.hypot(ms.vel.x, ms.vel.z) * dt : 0;
+    this.stepAcc += ms.grounded && me.alive && !input.walk && !ms.crouching ? Math.hypot(ms.vel.x, ms.vel.z) * dt : 0;
     if (this.stepAcc > 2.3) { this.stepAcc = 0; sfx.step(); }
 
     if (!me.alive && !this.isRange) {

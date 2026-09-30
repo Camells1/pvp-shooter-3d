@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, session, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, session, shell, Menu } = require('electron');
 const path = require('path');
 const { Updater } = require('./updater');
 
@@ -41,6 +41,8 @@ app.commandLine.appendSwitch('force_high_performance_gpu');
 // or two copies on one PC, can connect directly even when the router can't loop traffic back.
 app.commandLine.appendSwitch('disable-features', 'WebRtcHideLocalIpsWithMdns');
 
+// No app menu: its hidden shortcuts (Ctrl+R reload, Ctrl+W close) would fire while crouching with Ctrl
+Menu.setApplicationMenu(null);
 app.whenReady().then(createWindow);
 app.on('before-quit', () => updater.installOnQuit());
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });

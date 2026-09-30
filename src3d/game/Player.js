@@ -2,6 +2,8 @@
 import { weaponById, GRAVITY } from './data.js';
 
 const STEP = 0.62;
+export const CROUCH_H = 0.74;   // crouched height as a fraction of standing height
+export const CROUCH_SPEED = 0.5; // move speed while crouched
 
 export class Player {
   constructor(char, world) {
@@ -9,6 +11,8 @@ export class Player {
     this.world = world;
     this.r = char.radius;
     this.h = char.height;
+    this.hStand = char.height;
+    this.crouchAmt = 0;         // 0 standing .. 1 fully crouched (height, speed and aim follow it)
     this.pos = { x: 0, y: 0, z: 0 };
     this.vel = { x: 0, y: 0, z: 0 };
     this.yaw = 0; this.pitch = 0;
@@ -44,6 +48,7 @@ export class Player {
     this.bloom = 0;
     this.airTime = 0;
     this.channeling = false;
+    this.crouchAmt = 0; this.h = this.hStand;
   }
 
   get cur() { return this.inv[this.slot] || this.inv.sidearm || this.inv.primary; }
@@ -54,6 +59,7 @@ export class Player {
   get cloaked() { return this.cloakT > 0; }
   get reloadProgress() { return this.reloadT < 0 ? -1 : 1 - this.reloadT / this.w.reload; }
   get ultCost() { return this.char.abilities[2].ult; }
+  get crouching() { return this.crouchAmt > 0.5; }
 
   forward() { return { x: -Math.sin(this.yaw), z: -Math.cos(this.yaw) }; }
   aimDir() { const cp = Math.cos(this.pitch); return { x: -Math.sin(this.yaw) * cp, y: Math.sin(this.pitch), z: -Math.cos(this.yaw) * cp }; }
@@ -86,11 +92,12 @@ export class Player {
     const sp = Math.hypot(this.vel.x, this.vel.z);
     let s = w.spread + w.moveSpread * Math.min(1, sp / 6) + this.bloom;
     if (!this.grounded) s += 0.03;
+    s *= 1 - 0.25 * this.crouchAmt; // crouching steadies your aim
     if (ads) s *= w.adsSpread;
     return s;
   }
 
-  // input: { mx, mz, jump, walk, yaw, pitch, fire, ads, reload, slot, ab: 'Q'|'E'|'X'|null }
+  // input: { mx, mz, jump, walk, crouch, yaw, pitch, fire, ads, reload, slot, ab: 'Q'|'E'|'X'|null }
   update(dt, input, onFire) {
     this.yaw = input.yaw; this.pitch = input.pitch;
     if (this.dead) return;
@@ -191,15 +198,25 @@ export class Player {
     return true;
   }
 
+  // Crouch: shrink the collision box from the top; only stand back up where there is headroom
+  _crouch(dt, want) {
+    const target = want ? 1 : 0;
+    let amt = this.crouchAmt + Math.sign(target - this.crouchAmt) * Math.min(Math.abs(target - this.crouchAmt), dt * 8);
+    const h = this.hStand * (1 - (1 - CROUCH_H) * amt);
+    if (h > this.h + 1e-4 && !this.world.fits(this.pos.x, this.pos.y + 0.01, this.pos.z, this.r, h)) return;
+    this.crouchAmt = amt; this.h = h;
+  }
+
   move(dt, input) {
     const c = this.char;
+    this._crouch(dt, !!input.crouch && !this.dashT);
     const f = this.forward(), rx = -f.z, rz = f.x;
     const locked = this.frozen || this.channeling;
     const mx = locked ? 0 : input.mx, mz = locked ? 0 : input.mz;
     let wx = f.x * mz + rx * mx, wz = f.z * mz + rz * mx;
     const wl = Math.hypot(wx, wz);
     if (wl > 1) { wx /= wl; wz /= wl; }
-    let speed = c.speed * this.w.moveMul * (input.ads ? 0.62 : 1) * (input.walk ? 0.5 : 1);
+    let speed = c.speed * this.w.moveMul * (input.ads ? 0.62 : 1) * (input.walk ? 0.5 : 1) * (1 - (1 - CROUCH_SPEED) * this.crouchAmt);
     if (this.reloadT >= 0) speed *= 0.9;
     if (this.slowT > 0) speed *= 1 - this.slowAmt;
 
