@@ -63,6 +63,7 @@ const models = [];
 if (view === 'chars') {
   const yaw = +(q.get('yaw') ?? 0);
   CHARACTERS.forEach((c, i) => {
+    if (q.get('only') && c.id !== q.get('focus')) return;
     const m = new CharacterModel(c);
     m.setWeapon(q.get('w') || { blaze: 'smg', tank: 'shotgun', ghost: 'sniper', volt: 'ar', frost: 'scout', nova: 'mpistol', echo: 'lmg', rift: 'stinger', rook: 'carbine' }[c.id]);
     m.root.position.x = (i - (CHARACTERS.length - 1) / 2) * 1.25;
@@ -91,7 +92,7 @@ if (view === 'gun') {
   const g = buildGun(q.get('w') || 'ar', 0xffb13d, q.get('skin') || 'default');
   const box = new THREE.Box3().setFromObject(g), size = box.getSize(new THREE.Vector3()), ctr = box.getCenter(new THREE.Vector3());
   g.position.sub(ctr); const h = new THREE.Group(); h.add(g); h.position.y = 1.2; h.rotation.y = Math.PI / 2 - +(q.get('yaw') || 0);
-  h.rotation.x = +(q.get('pitch') || 0); scene.add(h); floor.visible = false;
+  h.rotation.x = +(q.get('pitch') || 0); scene.add(h); floor.visible = false; window.__turn = h;
   const d = Math.max(size.x, size.y, size.z) * 1.9;
   camera.position.set(0, 1.2, d); camera.lookAt(0, 1.2, 0);
 }
@@ -110,7 +111,7 @@ let vm = null;
 if (view === 'fp') {
   vm = new ViewModel(getEnvMap(renderer));
   vm.setChar(CHARACTERS.find(c => c.id === (q.get('c') || 'blaze')));
-  vm.setWeapon(q.get('w') || 'ar');
+  vm.setWeapon(q.get('w') || 'ar', q.get('skin') || 'default');
   camera.fov = 90; camera.position.set(0, 1.6, 0); camera.lookAt(0, 1.6, -5);
   const wall = new THREE.Mesh(new THREE.PlaneGeometry(40, 20), new THREE.MeshStandardMaterial({ color: 0x2a3140 }));
   wall.position.set(0, 3, -12); scene.add(wall);
@@ -142,6 +143,18 @@ for (const l of labels) {
 let tris = 0, calls = 0;
 scene.traverse(o => { if (o.isMesh && o.visible) { calls++; tris += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; } });
 window.__stats = { tris: Math.round(tris), calls, models: models.length }; window.__models = models;
+// &step=1: drive it frame by frame from a script (window.__step(dt), window.__play(kind)) to record clips
+if (q.get('step')) {
+  window.__step = dt => {
+    tickSkins(dt);
+    for (const { m, yaw } of models) m.update(dt, { ...st, yaw, vx: -Math.sin(yaw) * mv, vz: -Math.cos(yaw) * mv });
+    if (vm) vm.update(dt, { speed: 0, grounded: true, ads: false, reload: -1 }, camera);
+    if (window.__turn) window.__turn.rotation.y += dt * 0.9;
+    composer.render();
+    if (vm) { renderer.autoClear = false; renderer.clearDepth(); renderer.render(vm.scene, vm.camera); renderer.autoClear = true; }
+  };
+  window.__play = k => { vm?.play(k); for (const { m } of models) m.play(k); if (k === 'inspect') skinBurst(); };
+}
 window.__ready = true;
 </script>
 </body>
