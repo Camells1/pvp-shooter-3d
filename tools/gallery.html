@@ -23,7 +23,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { CHARACTERS, WEAPONS } from '../src3d/game/data.js';
+import { CHARACTERS, WEAPONS, SKINS } from '../src3d/game/data.js';
 import { CharacterModel, buildGun } from '../src3d/game/models.js';
 import { ViewModel } from '../src3d/game/viewmodel.js';
 import { getEnvMap } from '../src3d/game/envmap.js';
@@ -41,7 +41,7 @@ document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0b0f16);
 scene.environment = getEnvMap(renderer);
-scene.environmentIntensity = 0.35;
+scene.environmentIntensity = ['gun', 'guns', 'skins'].includes(view) ? 0.9 : 0.35;
 scene.add(new THREE.HemisphereLight(0x8aa4d6, 0x1a1a22, 1.1));
 const key = new THREE.DirectionalLight(0xfff2e0, 3.2);
 key.position.set(4, 7, 8); key.castShadow = true; key.shadow.mapSize.set(2048, 2048);
@@ -83,6 +83,26 @@ if (view === 'chars') {
   camera.position.set(0, 1.65, 9); camera.lookAt(0, 1.65, 0);
 }
 
+if (view === 'gun') {
+  // One gun, large: ?w=ar&skin=carbon&yaw=0.6 (yaw 0 = side on, muzzle to the right)
+  const g = buildGun(q.get('w') || 'ar', 0xffb13d, q.get('skin') || 'default');
+  const box = new THREE.Box3().setFromObject(g), size = box.getSize(new THREE.Vector3()), ctr = box.getCenter(new THREE.Vector3());
+  g.position.sub(ctr); const h = new THREE.Group(); h.add(g); h.position.y = 1.2; h.rotation.y = Math.PI / 2 - +(q.get('yaw') || 0);
+  h.rotation.x = +(q.get('pitch') || 0); scene.add(h); floor.visible = false;
+  const d = Math.max(size.x, size.y, size.z) * 1.9;
+  camera.position.set(0, 1.2, d); camera.lookAt(0, 1.2, 0);
+}
+if (view === 'skins') {
+  // Every skin on one gun, side on: ?w=ar
+  floor.visible = false;
+  const skins = SKINS.map(s => s.id);
+  skins.forEach((sk, i) => {
+    const g = buildGun(q.get('w') || 'ar', 0xffb13d, sk);
+    g.position.set(((i % 5) - 2) * 1.5, 2.2 - Math.floor(i / 5) * 1.0, 0); g.rotation.y = Math.PI / 2;
+    scene.add(g); label(sk, new THREE.Vector3(g.position.x, g.position.y - 0.3, 0));
+  });
+  camera.position.set(0, 1.7, 11); camera.lookAt(0, 1.7, 0);
+}
 let vm = null;
 if (view === 'fp') {
   vm = new ViewModel(getEnvMap(renderer));

@@ -154,6 +154,23 @@ INSET.userData.shared = true;
 const holoGlass = new THREE.MeshBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.05, depthWrite: false, side: THREE.DoubleSide });
 let reticleMat = null;
 
+// Barrel ends per gun: [x, y, z, bore radius]
+const BORES = {
+  classic: [[0, 0.035, 0.21, 0.0075]],
+  mpistol: [[0, 0.035, 0.25, 0.0105]],
+  cannon: [[0, 0.045, 0.36, 0.0125]],
+  shorty: [[0.017, 0.035, 0.287, 0.0105], [-0.017, 0.035, 0.287, 0.0105]],
+  stinger: [[0, 0.02, 0.4, 0.009]],
+  carbine: [[0, 0.03, 0.43, 0.0085]],
+  marksman: [[0, 0.03, 0.82, 0.0085]],
+  smg: [[0, 0.03, 0.46, 0.0105]],
+  shotgun: [[0, 0.045, 0.67, 0.016], [0, 0.005, 0.6, 0.011]],
+  ar: [[0, 0.03, 0.68, 0.0085]],
+  scout: [[0, 0.035, 0.835, 0.0115]],
+  lmg: [[0, 0.03, 0.75, 0.0145]],
+  sniper: [[0, 0.035, 0.8, 0.0115]]
+};
+
 export function buildGun(id, accent = 0xff8800, skin = 'default') {
   const m = skinMats(skin, accent);
   const g = new THREE.Group();
@@ -183,6 +200,15 @@ export function buildGun(id, accent = 0xff8800, skin = 'default') {
   const gripTex = (y, z, rx, n = 4, w = 0.044) => { for (let i = 0; i < n; i++) add(rb(w, 0.004, 0.052, 0.0015), INSET, 0, y - i * 0.02, z - i * 0.02 * Math.tan(rx), rx); };
   const chargingHandle = (y, z, w = 0.03) => { add(rb(w, 0.01, 0.018, 0.003), m.metal, 0, y, z); for (const s of [1, -1]) add(rb(0.008, 0.012, 0.016, 0.003), m.metal, s * (w / 2 + 0.003), y, z); };
   const buttPad = (y, z, h, w, rx) => add(rb(w, h, 0.014, 0.005), INSET, 0, y, z, rx);
+  // Magazine base plate, and a cartridge window on both sides showing a few rounds (tilted with the magazine)
+  const magBase = (y, z, rx, w, d) => add(rb(w + 0.004, 0.012, d, 0.004), m.metal, 0, y, z, rx);
+  const magWindow = (y, z, rx, w, h = 0.06, n = 3) => {
+    const grp = new THREE.Group(); grp.position.set(0, y, z); grp.rotation.x = rx; g.add(grp);
+    for (const s of [1, -1]) {
+      mesh(rb(0.002, h, 0.022, 0.001), INSET, s * (w / 2 + 0.0005), 0, 0, grp);
+      for (let i = 0; i < n; i++) mesh(rb(0.0016, h / (n + 1) * 0.55, 0.016, 0.0006), m.accent, s * (w / 2 + 0.0012), -h / 2 + (i + 1) * h / (n + 1), 0, grp);
+    }
+  };
   // Holographic sight: frame, tinted glass, glowing reticle. Returns the eye-line point.
   const holo = (y, z) => {
     // Slim frame: thin posts and top bar so the window is almost all glass
@@ -235,6 +261,8 @@ export function buildGun(id, accent = 0xff8800, skin = 'default') {
     pins(0.022, -0.005, [0.0, 0.06]);
     slots(0.0225, -0.012, 0.1, 2, 0.02, 0.012, 0.006);
     add(rb(0.02, 0.012, 0.012, 0.003), m.metal, 0, 0.012, -0.05, 0.4); // hammer
+    magBase(-0.108, -0.019, 0.25, 0.042, 0.056); magWindow(-0.06, -0.007, 0.25, 0.042, 0.05, 2);
+    add(rb(0.004, 0.008, 0.026, 0.002), m.metal, -0.0265, 0.02, 0.03); // slide stop
     muzzle = new THREE.Vector3(0, 0.035, 0.22);
     fore = new THREE.Vector3(0.02, -0.075, 0.02);
     sight = new THREE.Vector3(0, 0.08, -0.02);
@@ -257,6 +285,7 @@ export function buildGun(id, accent = 0xff8800, skin = 'default') {
     gripTex(-0.06, -0.01, 0.18, 5, 0.043);
     for (const s of [1, -1]) add(rb(0.004, 0.03, 0.02, 0.002), m.accent, s * 0.024, -0.2, -0.023, 0.18); // mag base grips
     add(rb(0.05, 0.012, 0.024, 0.004), m.polymer, 0, -0.005, -0.06); // folding brace
+    magWindow(-0.12, -0.007, 0.18, 0.042, 0.09);
     muzzle = new THREE.Vector3(0, 0.035, 0.25);
     fore = new THREE.Vector3(0, -0.05, 0.12);
     sight = new THREE.Vector3(0, 0.082, -0.03);
@@ -327,6 +356,7 @@ export function buildGun(id, accent = 0xff8800, skin = 'default') {
     chargingHandle(0.064, -0.02, 0.022);
     add(rb(0.022, 0.012, 0.012, 0.003), m.metal, 0, 0.068, -0.04); // rear aperture
     add(rb(0.004, 0.012, 0.006, 0.001), m.glow, 0, 0.068, 0.3);   // front post
+    magBase(-0.22, 0.103, 0.16, 0.034, 0.05); magWindow(-0.115, 0.12, 0.16, 0.034, 0.12, 4);
     muzzle = new THREE.Vector3(0, 0.02, 0.4);
     fore = new THREE.Vector3(0, -0.075, 0.26);
     sight = new THREE.Vector3(0, 0.074, -0.04);
@@ -353,6 +383,7 @@ export function buildGun(id, accent = 0xff8800, skin = 'default') {
     for (const s of [1, -1]) add(cyl(0.006, 0.006, 0.01, 8), m.metal, s * 0.037, 0.0, -0.2, 0, 0, Math.PI / 2);
     sight = holo(0.09, 0.02); sightType = 'holo';
     grip = new THREE.Vector3(0, -0.07, 0.08);
+    magBase(-0.165, -0.108, 0.12, 0.04, 0.074); magWindow(-0.1, -0.1, 0.12, 0.04, 0.09);
     muzzle = new THREE.Vector3(0, 0.03, 0.44);
     fore = new THREE.Vector3(0, -0.03, 0.24);
   } else if (id === 'marksman') {
@@ -381,6 +412,7 @@ export function buildGun(id, accent = 0xff8800, skin = 'default') {
     for (const s of [1, -1]) { const leg = add(rb(0.01, 0.01, 0.16, 0.003), m.metal, 0.02 * s, -0.022, 0.46); void leg; } // folded bipod
     rail(0.24, 0.074, 0.06);
     sight = scope(0.1, 0.05, 0.2, 0.02); sightType = 'scope';
+    magBase(-0.156, 0.132, 0.05, 0.04, 0.08); magWindow(-0.1, 0.135, 0.05, 0.04, 0.08);
     muzzle = new THREE.Vector3(0, 0.03, 0.83);
     fore = new THREE.Vector3(0, -0.02, 0.4);
   } else if (id === 'smg') {
@@ -407,6 +439,7 @@ export function buildGun(id, accent = 0xff8800, skin = 'default') {
     for (let i = 0; i < 3; i++) add(rb(0.042, 0.005, 0.052, 0.002), INSET, 0, -0.06 - i * 0.04, 0.12 + i * 0.005, 0.12); // mag ribs
     buttPad(-0.01, -0.252, 0.08, 0.05, 0);
     sight = holo(0.082, 0.06); sightType = 'holo';
+    magWindow(-0.1, 0.12, 0.12, 0.04, 0.1);
     muzzle = new THREE.Vector3(0, 0.03, 0.47);
     fore = new THREE.Vector3(0, -0.04, 0.22);
   } else if (id === 'shotgun') {
@@ -469,6 +502,8 @@ export function buildGun(id, accent = 0xff8800, skin = 'default') {
     buttPad(-0.02, -0.34, 0.11, 0.056, -0.06);
     for (const s of [1, -1]) add(cyl(0.006, 0.006, 0.01, 8), m.metal, s * 0.026, -0.03, -0.3, 0, 0, Math.PI / 2); // sling mount
     sight = holo(0.082, 0.06); sightType = 'holo';
+    magBase(-0.194, 0.135, 0.35, 0.04, 0.074); magWindow(-0.07, 0.13, 0.12, 0.04, 0.07);
+    add(rb(0.014, 0.016, 0.02, 0.004), m.metal, -0.036, 0.055, 0.02); // forward assist
     muzzle = new THREE.Vector3(0, 0.03, 0.69);
     fore = new THREE.Vector3(0, -0.03, 0.34);
   } else if (id === 'scout') {
@@ -492,6 +527,7 @@ export function buildGun(id, accent = 0xff8800, skin = 'default') {
     add(rb(0.04, 0.02, 0.12, 0.006), m.body, 0, 0.04, -0.2, -0.08); // cheek riser
     buttPad(-0.02, -0.345, 0.09, 0.052, -0.08);
     sight = scope(0.1, 0.08, 0.2, 0.022); sightType = 'scope';
+    magBase(-0.1, 0.1, 0, 0.035, 0.054); magWindow(-0.06, 0.1, 0, 0.035, 0.05, 2);
     muzzle = new THREE.Vector3(0, 0.035, 0.84);
     fore = new THREE.Vector3(0, -0.04, 0.34);
   } else if (id === 'lmg') {
@@ -554,8 +590,15 @@ export function buildGun(id, accent = 0xff8800, skin = 'default') {
     gripTex(-0.05, 0.0, 0.28, 4, 0.041);
     buttPad(-0.02, -0.385, 0.12, 0.058, -0.08);
     sight = scope(0.12, 0.1, 0.28, 0.032); sightType = 'scope';
+    magBase(-0.122, 0.12, 0, 0.045, 0.064); magWindow(-0.07, 0.12, 0, 0.045, 0.06, 2);
     muzzle = new THREE.Vector3(0, 0.035, 0.8);
     fore = new THREE.Vector3(0, -0.04, 0.34);
+  }
+  // Dark bore and a crown ring at every barrel end, so the muzzle reads as a real opening (x, y, z of the barrel end, bore radius)
+  for (const [bx, by, bz, br] of BORES[id] || BORES.sniper) {
+    const hole = add(new THREE.CircleGeometry(br, 16), INSET, bx, by, bz + 0.0012);
+    hole.castShadow = false;
+    add(tor(br * 1.35, br * 0.28), m.metal, bx, by, bz + 0.0005);
   }
   g.userData = { muzzle, grip, fore, sight, sightType };
   return mergeStatic(g);

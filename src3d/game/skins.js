@@ -103,6 +103,47 @@ const TEX = {
     for (let i = 0; i < 220; i++) { const b = 150 + rnd() * 105; x.fillStyle = `rgb(${b},${b},255)`; x.fillRect(rnd() * S, rnd() * S, rnd() < 0.1 ? 2 : 1, rnd() < 0.1 ? 2 : 1); }
   })
 };
+// Surface detail shared by every skin (bump maps only, so skin colors and patterns are untouched):
+//   panel   engraved panel border, rivets and scratches (receivers, bodies)
+//   grain   fine brushed-metal grain (metal parts, accents)
+//   stipple grip stippling (polymer)
+// Separate random stream so adding surface detail never changes the existing skin patterns
+let dseed = 4242;
+const drnd = () => ((dseed = (dseed * 16807) % 2147483647) / 2147483647);
+const DETAIL = {
+  panel: () => {
+    const c = document.createElement('canvas'); c.width = c.height = 256;
+    const x = c.getContext('2d');
+    x.fillStyle = '#b4b4b4'; x.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 2200; i++) { const v = 150 + drnd() * 60; x.fillStyle = `rgb(${v},${v},${v})`; x.fillRect(drnd() * 256, drnd() * 256, 1.5, 1.5); }
+    x.strokeStyle = '#3a3a3a'; x.lineWidth = 5; x.strokeRect(14, 14, 228, 228);
+    x.strokeStyle = '#e4e4e4'; x.lineWidth = 2; x.strokeRect(22, 22, 212, 212);
+    for (const [px, py] of [[34, 34], [222, 34], [34, 222], [222, 222]]) { x.fillStyle = '#fff'; x.beginPath(); x.arc(px, py, 5, 0, 7); x.fill(); x.fillStyle = '#555'; x.beginPath(); x.arc(px, py, 2, 0, 7); x.fill(); }
+    x.lineWidth = 1;
+    for (let i = 0; i < 24; i++) { x.strokeStyle = drnd() < 0.5 ? '#d8d8d8' : '#6a6a6a'; const sx = 30 + drnd() * 196, sy = 30 + drnd() * 196, a = drnd() * 3.14, l = 8 + drnd() * 26; x.beginPath(); x.moveTo(sx, sy); x.lineTo(sx + Math.cos(a) * l, sy + Math.sin(a) * l); x.stroke(); }
+    return c;
+  },
+  grain: () => {
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const x = c.getContext('2d');
+    x.fillStyle = '#b0b0b0'; x.fillRect(0, 0, 128, 128);
+    for (let i = 0; i < 260; i++) { const v = 120 + drnd() * 100; x.strokeStyle = `rgb(${v},${v},${v})`; x.lineWidth = 1; const y = drnd() * 128, l = 10 + drnd() * 50, px = drnd() * 128; x.beginPath(); x.moveTo(px, y); x.lineTo(px + l, y + (drnd() - 0.5) * 2); x.stroke(); }
+    return c;
+  },
+  stipple: () => {
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const x = c.getContext('2d');
+    x.fillStyle = '#c0c0c0'; x.fillRect(0, 0, 128, 128);
+    for (let j = 0; j < 32; j++) for (let i = 0; i < 32; i++) { x.fillStyle = '#4a4a4a'; x.beginPath(); x.arc(i * 4 + (j % 2) * 2 + 2, j * 4 + 2, 1.25, 0, 7); x.fill(); }
+    return c;
+  }
+};
+const detailCache = {};
+const detail = kind => {
+  if (!detailCache[kind]) { const t = new THREE.CanvasTexture(DETAIL[kind]()); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; detailCache[kind] = t; }
+  return detailCache[kind];
+};
+
 const texCache = {};
 const T = k => (texCache[k] ||= TEX[k]());
 
@@ -145,6 +186,11 @@ export function skinMats(skin = 'default', accent = 0xff8800) {
     default:
       m = { body: M({ color: 0x474e58, metalness: 0.7, roughness: 0.34 }), metal: M({ color: 0x9aa2ac, metalness: 0.95, roughness: 0.2 }), polymer: M({ color: 0x24282e, metalness: 0.08, roughness: 0.72 }), accent: M({ color: accent, metalness: 0.35, roughness: 0.32 }), glow: glow(accent) };
   }
+  // Surface detail on top of whichever skin: engraved panels on the body, grain on metal, stippling on polymer
+  m.body.bumpMap = detail('panel'); m.body.bumpScale = 1.2;
+  m.metal.bumpMap = detail('grain'); m.metal.bumpScale = 0.5;
+  m.polymer.bumpMap = detail('stipple'); m.polymer.bumpScale = 0.6;
+  m.accent.bumpMap = detail('grain'); m.accent.bumpScale = 0.4;
   for (const mat of Object.values(m)) mat.userData.shared = true;
   cache.set(key, m);
   return m;
