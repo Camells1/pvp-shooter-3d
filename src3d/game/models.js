@@ -609,8 +609,9 @@ export class CharacterModel {
 
   _build() {
     const M = this.mats, c = this.char, B = this.body;
-    const tank = c.id === 'tank', ghost = c.id === 'ghost';
-    if (tank) B.scale.set(1.16, 1.07, 1.12);
+    const rook = c.id === 'rook', tank = c.id === 'tank' || rook, ghost = c.id === 'ghost' || c.id === 'rift';
+    if (c.id === 'tank') B.scale.set(1.16, 1.07, 1.12);
+    if (rook) B.scale.set(1.08, 1.04, 1.08);
     if (ghost) B.scale.set(0.95, 1.0, 0.95);
     // Small-part helpers: cheaper rounded boxes, and glow strips
     const glowBar = (w, h, d, x, y, z, parent) => mesh(rbs(w, h, d, Math.min(w, h, d) * 0.4), M.glow, x, y, z, parent);
@@ -890,6 +891,47 @@ export class CharacterModel {
       mesh(sph(0.02, 10, 8), M.glow, 0, 0.2, -0.16, pack);
       mesh(cyl(0.012, 0.012, 0.12), M.trim, 0, 0.12, -0.09, pack);                                  // dish mast
       mesh(rbs(0.05, 0.05, 0.05, 0.01), M.armorDark, 0, 0.06, -0.09, pack);
+    } else if (id === 'rift') {
+      // Sleek phase runner: swept crest, blade fins, and a glowing rift ring behind the back
+      mesh(sph(0.14), M.armor, 0, 0.02, 0, head).scale.set(0.95, 1.06, 1.12);
+      mesh(rbs(0.21, 0.055, 0.09, 0.025), M.visor, 0, 0.015, 0.108, head);
+      mesh(rbs(0.23, 0.012, 0.1, 0.005), M.armorDark, 0, 0.055, 0.112, head);
+      glowBar(0.19, 0.008, 0.012, 0, 0.015, 0.155, head);
+      for (const s2 of [1, -1]) {
+        const crest = mesh(rbs(0.022, 0.045, 0.3, 0.008), M.armorDark, 0.045 * s2, 0.14, -0.06, head); crest.rotation.set(-0.5, -0.12 * s2, 0);
+        const edge = glowBar(0.008, 0.008, 0.26, 0.045 * s2, 0.165, -0.06, head); edge.rotation.set(-0.5, -0.12 * s2, 0);
+        const wing = mesh(rbs(0.012, 0.11, 0.18, 0.005), M.armorDark, 0.165 * s2, 0.0, -0.05, head); wing.rotation.set(0, 0.35 * s2, 0.2 * s2);
+        const wedge = glowBar(0.008, 0.09, 0.008, 0.175 * s2, -0.005, 0.02, head); wedge.rotation.set(0, 0.35 * s2, 0.2 * s2);
+      }
+      // Rift ring
+      const ring = mesh(tor(0.2, 0.016), M.glow, 0, 0.14, -0.12, pack);
+      mesh(tor(0.14, 0.01), M.armorDark, 0, 0.14, -0.12, pack);
+      mesh(sph(0.045, 14, 10), M.glow, 0, 0.14, -0.12, pack).scale.set(1, 1, 0.5);
+      for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + Math.PI / 4; mesh(rbs(0.014, 0.05, 0.02, 0.005), M.trim, Math.cos(a) * 0.2, 0.14 + Math.sin(a) * 0.2, -0.12, pack).rotation.z = a; }
+      mesh(rbs(0.06, 0.2, 0.05, 0.015), M.trim, 0, 0.0, -0.09, pack);
+      void ring;
+      // Hip scarf
+      for (const s2 of [1, -1]) mesh(rbs(0.03, 0.2, 0.012, 0.005), M.armorDark, 0.07 * s2, -0.12, -0.13, this.hips).rotation.x = 0.15;
+    } else if (id === 'rook') {
+      // Fortress helm with a crenellated crown, a slit visor and a tower shield on the back
+      mesh(rbs(0.27, 0.27, 0.28, 0.06), M.armor, 0, 0.02, 0, head);
+      mesh(rbs(0.23, 0.075, 0.04, 0.012), M.armorDark, 0, 0.03, 0.14, head);
+      glowBar(0.2, 0.026, 0.012, 0, 0.03, 0.16, head);
+      mesh(rbs(0.29, 0.03, 0.3, 0.01), M.trim, 0, 0.15, 0, head);
+      for (let i = 0; i < 5; i++) mesh(rbs(0.04, 0.05, 0.05, 0.008), M.armorDark, -0.1 + i * 0.05, 0.19, 0.11, head);
+      for (let i = 0; i < 5; i++) mesh(rbs(0.04, 0.05, 0.05, 0.008), M.armorDark, -0.1 + i * 0.05, 0.19, -0.11, head);
+      for (const s2 of [1, -1]) {
+        mesh(rbs(0.04, 0.05, 0.16, 0.008), M.armorDark, 0.125 * s2, 0.19, 0, head);
+        mesh(rbs(0.03, 0.16, 0.22, 0.01), M.armorDark, 0.145 * s2, 0.0, 0.0, head);        // cheek plates
+      }
+      mesh(rbs(0.16, 0.03, 0.05, 0.01), M.trim, 0, -0.1, 0.14, head);
+      // Tower shield across the back
+      mesh(rbs(0.4, 0.56, 0.05, 0.02), M.armor, 0, 0.06, -0.1, pack);
+      mesh(rbs(0.34, 0.5, 0.02, 0.015), M.armorDark, 0, 0.06, -0.13, pack);
+      for (const s2 of [1, -1]) glowBar(0.012, 0.42, 0.012, 0.1 * s2, 0.06, -0.145, pack);
+      glowBar(0.2, 0.014, 0.012, 0, 0.26, -0.145, pack);
+      mesh(rbs(0.44, 0.04, 0.06, 0.012), M.trim, 0, 0.35, -0.1, pack);
+      mesh(rbs(0.44, 0.04, 0.06, 0.012), M.trim, 0, -0.23, -0.1, pack);
     } else { // volt
       mesh(sph(0.145), M.armor, 0, 0.01, 0, head).scale.set(1, 1, 1.08);
       mesh(rbs(0.22, 0.09, 0.1, 0.04), M.visor, 0, 0.0, 0.1, head);

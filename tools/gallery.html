@@ -61,14 +61,14 @@ if (view === 'chars') {
   const yaw = +(q.get('yaw') ?? 0);
   CHARACTERS.forEach((c, i) => {
     const m = new CharacterModel(c);
-    m.setWeapon(q.get('w') || { blaze: 'smg', tank: 'shotgun', ghost: 'sniper', volt: 'ar', frost: 'scout', nova: 'mpistol', echo: 'lmg' }[c.id]);
-    m.root.position.x = (i - 3) * 1.25;
+    m.setWeapon(q.get('w') || { blaze: 'smg', tank: 'shotgun', ghost: 'sniper', volt: 'ar', frost: 'scout', nova: 'mpistol', echo: 'lmg', rift: 'stinger', rook: 'carbine' }[c.id]);
+    m.root.position.x = (i - (CHARACTERS.length - 1) / 2) * 1.25;
     scene.add(m.root); models.push({ m, yaw });
     label(c.name, new THREE.Vector3(m.root.position.x, -0.05, 0));
   });
   const zoom = +(q.get('zoom') || 1);
-  camera.position.set(0, 1.2, 15 / zoom); camera.lookAt(0, 1.0, 0);
-  if (q.get('focus')) { const i = CHARACTERS.findIndex(c => c.id === q.get('focus')); camera.position.set((i - 3) * 1.25, 1.35, 4.2); camera.lookAt((i - 3) * 1.25, 1.05, 0); }
+  camera.position.set(0, 1.2, 19 / zoom); camera.lookAt(0, 1.0, 0);
+  if (q.get('focus')) { const i = CHARACTERS.findIndex(c => c.id === q.get('focus')), fx = (i - (CHARACTERS.length - 1) / 2) * 1.25; camera.position.set(fx, 1.35, 4.2); camera.lookAt(fx, 1.05, 0); }
 } else if (view === 'guns') {
   floor.visible = false;
   const list = WEAPONS.map(w => w.id);

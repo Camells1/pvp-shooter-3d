@@ -56,7 +56,7 @@ export class MenuStage {
       const ring = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.02, 8, 64), new THREE.MeshStandardMaterial({ color: 0x111111, emissive: c.color, emissiveIntensity: 1.8 }));
       ring.rotation.x = Math.PI / 2; ring.position.y = 0.25; g.add(ring);
       const m = new CharacterModel(c);
-      m.setWeapon({ blaze: 'smg', tank: 'shotgun', ghost: 'sniper', volt: 'ar', frost: 'scout', nova: 'mpistol', echo: 'lmg' }[c.id]);
+      m.setWeapon({ blaze: 'smg', tank: 'shotgun', ghost: 'sniper', volt: 'ar', frost: 'scout', nova: 'mpistol', echo: 'lmg', rift: 'stinger', rook: 'carbine' }[c.id] || 'ar');
       m.root.position.y = 0.25;
       m.root.traverse(o => { if (o.isMesh) o.castShadow = true; });
       g.add(m.root);
@@ -123,10 +123,12 @@ export class MenuStage {
         targets[id] = { x: Math.sin(a) * 10, z: -Math.cos(a) * 10 + 10, rot: -a * 1.2 + Math.sin(this.t * 0.4 + i) * 0.15, show: true };
       });
       // Fit the whole lineup to the window, whatever its shape:
-      // edges are ~6.2m out (incl. pedestals) and ~1.6m closer to the camera than the middle.
+      // the outermost pedestals are edgeX out (incl. pedestal) and edgeZ closer to the camera than the middle.
       const tanV = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
       const tanH = tanV * this.camera.aspect;
-      const dW = 1.6 + 6.3 / (tanH * 0.94);          // width: use 94% of the screen
+      const half = (n - 1) / 2 * 0.185;
+      const edgeX = Math.sin(half) * 10 + 0.9, edgeZ = 10 - Math.cos(half) * 10; // outermost pedestal: how far out, how much closer to the camera
+      const dW = edgeZ + edgeX / (tanH * 0.94);      // width: use 94% of the screen
       const dH = 2.5 / (2 * tanV * 0.42);            // height: fighters take ~42% of the screen
       const d = Math.max(dW, dH, 7);
       // Keep the fighters in the band between the logo (top) and the buttons (bottom)

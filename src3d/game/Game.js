@@ -853,7 +853,7 @@ export class Game {
 
   // ------------------------------------------------------------ shooting
   _hitboxes(p) {
-    const s = p.char.id === 'tank' ? 1.12 : 1;
+    const s = p.char.hitScale || 1;
     return {
       head: { x: p.pos.x, y: p.pos.y + p.h * 0.9, z: p.pos.z, r: 0.2 * s },
       body: { min: { x: p.pos.x - 0.33 * s, y: p.pos.y, z: p.pos.z - 0.33 * s }, max: { x: p.pos.x + 0.33 * s, y: p.pos.y + p.h * 0.8, z: p.pos.z + 0.33 * s } }

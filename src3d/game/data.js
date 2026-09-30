@@ -19,7 +19,7 @@ export const CHARACTERS = [
   {
     id: 'tank', name: 'Tank', role: 'Heavy',
     color: 0x3f8cff, accent: 0x8fe3ff,
-    speed: 5.8, health: 140, jump: 7.8, radius: 0.46, height: 1.95,
+    speed: 5.8, health: 140, jump: 7.8, radius: 0.46, height: 1.95, hitScale: 1.12,
     desc: 'Walking fortress. Soaks damage and shakes the ground.',
     abilities: [
       { key: 'Q', id: 'shield', name: 'Barrier', cd: 20, desc: 'Become immune to all damage for 2.5s.' },
@@ -87,6 +87,30 @@ export const CHARACTERS = [
       { key: 'X', id: 'overwatch', name: 'Overwatch', ult: 6, desc: 'Reveal all enemies to your team for 10s.' }
     ],
     stats: { spd: 4, hp: 2, abl: 5 }
+  },
+  {
+    id: 'rift', name: 'Rift', role: 'Skirmisher',
+    color: 0xff4fd8, accent: 0x7af0ff,
+    speed: 7.2, health: 95, jump: 9.0, radius: 0.34, height: 1.78,
+    desc: 'Fast flanker who tears through the line, mines the retreat and vanishes.',
+    abilities: [
+      { key: 'Q', id: 'dash', name: 'Dash', cd: 8, desc: 'Blast forward in the direction you move.' },
+      { key: 'E', id: 'mine', name: 'Trip Mine', cd: 18, desc: 'Plant a mine that explodes on enemies.' },
+      { key: 'X', id: 'cloak', name: 'Phantom', ult: 6, desc: 'Turn invisible for 6 seconds.' }
+    ],
+    stats: { spd: 5, hp: 2, abl: 4 }
+  },
+  {
+    id: 'rook', name: 'Rook', role: 'Sentinel',
+    color: 0xc4cddd, accent: 0xff9f43,
+    speed: 6.1, health: 120, jump: 8.0, radius: 0.41, height: 1.88, hitScale: 1.06,
+    desc: 'Holds a site: walls off lanes, shields up and calls a storm on anyone who pushes.',
+    abilities: [
+      { key: 'Q', id: 'wall', name: 'Ice Wall', cd: 22, desc: 'Raise a wall that blocks movement and bullets (8s).' },
+      { key: 'E', id: 'fortify', name: 'Fortify', cd: 28, desc: 'Instantly gain a full +50 shield.' },
+      { key: 'X', id: 'storm', name: 'Thunderstorm', ult: 7, desc: 'Call a storm where you aim that shocks and slows.' }
+    ],
+    stats: { spd: 2, hp: 4, abl: 4 }
   }
 ];
 
