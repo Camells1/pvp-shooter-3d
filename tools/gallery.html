@@ -2,7 +2,8 @@
 <!-- Model gallery (dev only): npm run serve, then open http://localhost:5178/tools/gallery.html
      ?view=chars  all agents, front and three-quarter
      ?view=guns   every gun, side on
-     ?view=fp&w=ar&c=blaze  first-person hands + gun -->
+     ?view=fp&w=ar&c=blaze  first-person hands + gun
+     add &rl=0..1 to freeze a reload animation at that point (chars and fp) -->
 <html>
 <head>
   <meta charset="utf-8">
@@ -98,9 +99,10 @@ composer.addPass(new RenderPass(scene, camera));
 composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.45, 0.4, 0.9));
 composer.addPass(new OutputPass());
 
-const st = { vx: 0, vz: 0, yaw: 0, pitch: 0, grounded: true, dead: false, reload: -1 };
+const rl = q.has('rl') ? +q.get('rl') : -1;
+const st = { vx: 0, vz: 0, yaw: 0, pitch: 0, grounded: true, dead: false, reload: rl };
 for (const { m, yaw } of models) { m.setShadow(true); for (let i = 0; i < 5; i++) m.update(0.05, { ...st, yaw: yaw }); }
-if (vm) for (let i = 0; i < 20; i++) vm.update(0.05, { speed: 0, grounded: true, ads: q.get('ads') === '1', reload: -1 }, camera);
+if (vm) for (let i = 0; i < 20; i++) vm.update(0.05, { speed: 0, grounded: true, ads: q.get('ads') === '1', reload: rl }, camera);
 composer.render();
 if (vm) { renderer.autoClear = false; renderer.clearDepth(); renderer.render(vm.scene, vm.camera); renderer.autoClear = true; }
 const el = document.getElementById('labels');

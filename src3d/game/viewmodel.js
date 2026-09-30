@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { disposeMerged, buildGun, SIDEARMS, getArmorDetail } from './models.js';
 import { weaponById } from './data.js';
+import { reloadAnim, makePropMesh } from './reload.js';
 
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0), _q = new THREE.Quaternion();
 
@@ -79,6 +80,10 @@ export class ViewModel {
     this.orb = new THREE.Mesh(new THREE.SphereGeometry(0.035, 16, 12), new THREE.MeshBasicMaterial({ color: char.accent, toneMapped: false }));
     this.orb.visible = false;
     this.rig.add(this.orb);
+    // Magazine / shell shown in the off hand while reloading
+    if (this.prop) this.rig.remove(this.prop);
+    this.prop = makePropMesh(glove, glow);
+    this.rig.add(this.prop);
   }
 
   // One-shot first-person animations: 'throw' | 'cast' | 'slam' | 'dash' | 'blink' | 'brace' | 'rocket' | 'inspect'
@@ -138,22 +143,24 @@ export class ViewModel {
     this.kneel = (this.kneel || 0) + ((s.channel ? 1 : 0) - (this.kneel || 0)) * Math.min(1, dt * 8);
     const lower = Math.max(act === 'throw' || act === 'cast' || act === 'slam' ? env : 0, this.kneel);
 
-    const rl = s.reload >= 0 ? Math.sin(Math.min(1, s.reload) * Math.PI) : 0;
-    const hx = hip[0] + (ads[0] - hip[0]) * a;
-    const hy = hip[1] + (ads[1] - hip[1]) * a;
+    // Reload pose comes from reload.js (gun tilt + where the off hand is); null when not reloading
+    const R = s.reload >= 0 && this.gun ? reloadAnim(this.weaponId, s.reload, this.gun.userData.fore) : null;
+    const lift = R ? R.pose.lift : 0;
+    const hx = hip[0] + (ads[0] - hip[0]) * a - lift * 0.07;
+    const hy = hip[1] + (ads[1] - hip[1]) * a + lift * 0.17;
     const hz = hip[2] + (ads[2] - hip[2]) * a;
     const breathe = Math.sin(this.t * 1.6) * 0.003 * (1 - a);
     const insp = act === 'inspect' ? env : 0;
     this.gunHolder.position.set(
       hx + Math.sin(this.t * bobF) * 0.012 * bob - this.sway.x - insp * 0.16 + (act === 'dash' ? 0.03 * env : 0),
-      hy + Math.abs(Math.cos(this.t * bobF)) * 0.012 * bob + this.sway.y - rl * 0.08 - this.switchT * 0.25 - this.landT * 0.03 + breathe - lower * 0.22 + insp * 0.06 - this.hitT * 0.02,
+      hy + Math.abs(Math.cos(this.t * bobF)) * 0.012 * bob + this.sway.y + (R ? R.pose.dy * 1.6 : 0) - this.switchT * 0.25 - this.landT * 0.03 + breathe - lower * 0.22 + insp * 0.06 - this.hitT * 0.02,
       hz + this.recoil * 0.05 + insp * 0.12 + this.hitT * 0.03
     );
     // Angle the muzzle toward the crosshair at the hip so you see the side of the gun
     this.gunHolder.rotation.set(
-      this.recoil * 0.12 + rl * 0.35 - this.switchT * 0.6 - lower * 0.5 + this.hitT * 0.08,
+      this.recoil * 0.12 + (R ? R.pose.up * 1.2 : 0) - this.switchT * 0.6 - lower * 0.5 + this.hitT * 0.08,
       this.sway.x * 2 + 0.07 * (1 - a) + insp * 1.3,
-      rl * 0.6 - 0.04 * (1 - a) + Math.sin(this.t * bobF * 0.5) * 0.01 * bob - insp * 0.55 + (act === 'dash' || act === 'blink' ? 0.35 * env : 0));
+      (R ? R.pose.roll : 0) - 0.04 * (1 - a) + Math.sin(this.t * bobF * 0.5) * 0.01 * bob - insp * 0.55 + (act === 'dash' || act === 'blink' ? 0.35 * env : 0));
     this.gunHolder.updateMatrix();
 
     // Scoped sniper: hide the viewmodel while looking through the scope
@@ -165,8 +172,7 @@ export class ViewModel {
       this.gun.updateMatrix();
       const ud = this.gun.userData;
       const grip = _a.copy(ud.grip).applyMatrix4(this.gun.matrix).applyMatrix4(this.gunHolder.matrix);
-      const fore = _b.copy(ud.fore).applyMatrix4(this.gun.matrix).applyMatrix4(this.gunHolder.matrix);
-      if (rl > 0) fore.lerp(new THREE.Vector3(hx - 0.05, hy - 0.12, hz + 0.05), rl);
+      const fore = _b.copy(R ? R.hand : ud.fore).applyMatrix4(this.gun.matrix).applyMatrix4(this.gunHolder.matrix);
       // Off hand leaves the gun for abilities / planting
       let off = null, w = 0;
       if (act === 'cast') { off = new THREE.Vector3(-0.14, -0.1 + Math.sin(this.t * 9) * 0.01, -0.42); w = Math.min(1, env * 1.8); }
@@ -176,6 +182,13 @@ export class ViewModel {
       if (off) fore.lerp(off, w);
       this._place(this.limbs[0], grip, new THREE.Vector3(0.5, -0.6, 0.1));
       this._place(this.limbs[1], fore, new THREE.Vector3(-0.25, -0.65, 0.0));
+      const pr = this.prop;
+      pr.visible = !!(R && R.prop);
+      if (pr.visible) {
+        pr.position.copy(R.propPos).applyMatrix4(this.gun.matrix).applyMatrix4(this.gunHolder.matrix);
+        pr.quaternion.copy(this.gunHolder.quaternion).multiply(this.gun.quaternion);
+        pr.scale.set(R.propSize[0], R.propSize[1], R.propSize[2]);
+      }
       this.orb.visible = (act === 'cast' && env > 0.15) || this.kneel > 0.3;
       if (this.orb.visible) { this.orb.position.copy(fore).add(new THREE.Vector3(0, 0.04, -0.04)); this.orb.scale.setScalar(0.7 + Math.sin(this.t * 18) * 0.15 + env * 0.5); }
     }

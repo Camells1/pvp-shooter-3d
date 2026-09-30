@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { skinMats } from './skins.js';
+import { reloadAnim, makePropMesh } from './reload.js';
 
 // Merge the rigid mesh children of every node that share a material into one mesh per material.
 // Guns and characters are built from dozens of small parts; this cuts their draw calls several times over.
@@ -754,6 +755,10 @@ export class CharacterModel {
     this.shield.castShadow = false;
     this.root.add(this.shield);
 
+    // Magazine / shell shown in the off hand while reloading
+    this.magProp = makePropMesh(this.mats.rubber, this.mats.glow);
+    this.gunMount.add(this.magProp);
+
     this.orb = mesh(sph(0.07, 14, 10), this.mats.glow, 0, 0, 0, this.chest);
     this.orb.castShadow = false;
     this.orb.visible = false;
@@ -1059,13 +1064,16 @@ export class CharacterModel {
     g.rotation.set(0, 0, 0);
     g.position.z -= this.recoil * 0.08;
     g.rotation.x = -this.recoil * 0.35;
-    let rl = 0;
-    if (s.reload >= 0) {
-      rl = Math.sin(Math.min(1, s.reload) * Math.PI);
-      g.rotation.z = rl * 0.7;
-      g.rotation.x += rl * 0.5;
-      g.position.y -= rl * 0.06;
+    // Reload: tilt the gun, and the off hand fetches / seats the magazine (see reload.js)
+    const R = s.reload >= 0 ? reloadAnim(this.weaponId, s.reload, this.gun.userData.fore) : null;
+    if (R) {
+      g.rotation.z += R.pose.roll;
+      g.rotation.x -= R.pose.up;
+      g.position.y += R.pose.dy;
     }
+    const mp = this.magProp;
+    mp.visible = !!(R && R.prop);
+    if (mp.visible) { mp.position.copy(R.propPos); mp.scale.set(R.propSize[0], R.propSize[1], R.propSize[2]); }
     const lower = act === 'throw' || act === 'cast' || act === 'slam' ? env : 0;
     g.rotation.z += lower * 0.9; g.position.y -= lower * 0.12; g.position.x -= lower * 0.05;
     if (kn > 0.01) { g.rotation.x += 0.7 * kn; g.position.y -= 0.1 * kn; }
@@ -1079,8 +1087,7 @@ export class CharacterModel {
     const right = this.arms.find(a => a.side === -1), left = this.arms.find(a => a.side === 1);
     _p.copy(ud.grip).applyMatrix4(g.matrix);
     this._solveArm(right, _p.clone(), new THREE.Vector3(-0.8, -0.6, -0.4).normalize());
-    _p.copy(ud.fore).applyMatrix4(g.matrix);
-    if (rl > 0) _p.lerp(new THREE.Vector3(-0.05, 0.02, 0.22), rl);
+    _p.copy(R ? R.hand : ud.fore).applyMatrix4(g.matrix);
     let off = null, w = 0;
     if (act === 'throw') { off = k < 0.4 ? new THREE.Vector3(0.32, 0.55, -0.22) : new THREE.Vector3(0.12, 0.38, 0.62); w = Math.min(1, env * 1.6); }
     if (act === 'cast') { off = new THREE.Vector3(0.16, 0.5 + Math.sin(this.time * 10) * 0.02, 0.42); w = Math.min(1, env * 1.8); }
