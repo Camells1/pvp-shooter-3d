@@ -1,6 +1,9 @@
 // Characters, abilities, weapons, shields, skins, economy. Distances are meters, times are seconds.
 
-export const VERSION = '2.7.0';
+export const VERSION = '2.7.1';
+
+// Developer accounts (Riftline IDs, name#TAG) own every skin for free while signed in
+export const DEV_IDS = ['CAT#CAT'];
 
 // Each fighter has Q and E abilities (cooldowns) and an X ultimate (charged by points).
 export const CHARACTERS = [

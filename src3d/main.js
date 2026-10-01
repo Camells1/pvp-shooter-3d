@@ -1,6 +1,6 @@
 // Riftline app entry: renderer, menus, shop, matchmaking, lobby, match lifecycle.
 import * as THREE from 'three';
-import { CHARACTERS, charById, WEAPONS, SKINS, BUNDLES, COINS, VERSION } from './game/data.js';
+import { CHARACTERS, charById, WEAPONS, SKINS, BUNDLES, COINS, VERSION, DEV_IDS } from './game/data.js';
 import { MAPS } from './game/maps.js';
 import { MenuStage } from './game/MenuStage.js';
 import { tickSkins, skinBurst } from './game/skins.js';
@@ -279,7 +279,8 @@ const TIER_COL = { Base: '#9aa3ad', Select: '#7fc8ff', Deluxe: '#3dff9a', Premiu
 const animTag = k => k.animated ? ' <span class="anim-tag">ANIMATED</span>' : '';
 const skinById = id => SKINS.find(k => k.id === id);
 const wName = id => WEAPONS.find(w => w.id === id).name;
-const owns = (w, k) => k === 'default' || profile.owned.includes(w + ':' + k);
+const isDev = () => !!(account.signedIn && account.user?.name && DEV_IDS.some(id => id.toLowerCase() === `${account.user.name}#${account.user.tag}`.toLowerCase()));
+const owns = (w, k) => k === 'default' || isDev() || profile.owned.includes(w + ':' + k);
 
 // Same offers for everyone on the same day; they rotate at local midnight.
 function dailyStore() {
