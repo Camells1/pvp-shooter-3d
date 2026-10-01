@@ -519,9 +519,11 @@ input[type=checkbox] { accent-color: var(--cyan); width: 16px; height: 16px; }
 .lk small { font-size: 10px; letter-spacing: 1px; color: var(--muted); }
 .lk.sel { border-color: var(--cyan); background: rgba(47,245,255,.08); }
 .lk .dot { width: 26px; height: 5px; border-radius: 3px; margin: 0 auto; }
-.locker-right { width: 320px; display: flex; flex-direction: column; gap: 8px; }
+.locker-right { width: 320px; display: flex; flex-direction: column; gap: 8px; min-height: 0; max-height: 100%; }
 .locker-title { font-size: 26px; font-weight: 800; letter-spacing: 3px; }
-.locker-skins { display: flex; flex-direction: column; gap: 6px; }
+.locker-skins { display: flex; flex-direction: column; gap: 6px; flex: 1; min-height: 0; overflow-y: auto; padding-right: 6px; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.25) transparent; }
+.locker-skins::-webkit-scrollbar { width: 6px; }
+.locker-skins::-webkit-scrollbar-thumb { background: rgba(255,255,255,.25); border-radius: 3px; }
 .ls { font-family: var(--font); color: var(--text); text-align: left; background: rgba(12,16,24,.8); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
 .ls.eq { border-color: var(--green); }
 .ls .tag { font-size: 10px; letter-spacing: 2px; }

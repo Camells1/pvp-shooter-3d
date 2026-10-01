@@ -97,15 +97,16 @@ if (view === 'gun') {
   camera.position.set(0, 1.2, d); camera.lookAt(0, 1.2, 0);
 }
 if (view === 'skins') {
-  // Every skin on one gun, side on: ?w=ar
+  // Every skin on one gun, side on: ?w=ar (&ids=a,b,c to pick skins, &cols=4 per row)
   floor.visible = false;
-  const skins = SKINS.map(s => s.id);
+  const skins = q.get('ids') ? q.get('ids').split(',') : SKINS.map(s => s.id);
+  const cols = +(q.get('cols') || 5), rows = Math.ceil(skins.length / cols);
   skins.forEach((sk, i) => {
     const g = buildGun(q.get('w') || 'ar', 0xffb13d, sk);
-    g.position.set(((i % 5) - 2) * 1.5, 2.2 - Math.floor(i / 5) * 1.0, 0); g.rotation.y = Math.PI / 2;
-    scene.add(g); label(sk, new THREE.Vector3(g.position.x, g.position.y - 0.3, 0));
+    g.position.set(((i % cols) - (cols - 1) / 2) * 1.5, 1.7 + ((rows - 1) / 2 - Math.floor(i / cols)) * 1.0, 0); g.rotation.y = Math.PI / 2;
+    scene.add(g); label(SKINS.find(s => s.id === sk)?.name || sk, new THREE.Vector3(g.position.x, g.position.y - 0.3, 0));
   });
-  camera.position.set(0, 1.7, 11); camera.lookAt(0, 1.7, 0);
+  camera.position.set(0, 1.7, Math.max(4, rows * 1.3 + 2, cols * 1.55 + 0.6)); camera.lookAt(0, 1.7, 0);
 }
 let vm = null;
 if (view === 'fp') {

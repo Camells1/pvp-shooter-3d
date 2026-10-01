@@ -174,7 +174,16 @@ export const SKINS = [
   { id: 'plasma', name: 'Plasma Flow', price: 2200, tier: 'Mythic', animated: true },
   { id: 'inferno', name: 'Inferno', price: 2200, tier: 'Mythic', animated: true },
   // Bundle skin: every gun becomes a dragon (head at the muzzle, horns, spine, wings) and the knife becomes a talon
-  { id: 'fireflame', name: 'Fire Flame', price: 3200, tier: 'Mythic', animated: true, bundle: 'fireflame' }
+  { id: 'fireflame', name: 'Fire Flame', price: 3200, tier: 'Mythic', animated: true, bundle: 'fireflame' },
+  // Inspired by Valorant's skin lines, original designs
+  { id: 'arcade', name: 'Arcade', price: 650, tier: 'Deluxe' },
+  { id: 'hannya', name: 'Hannya', price: 1200, tier: 'Premium' },
+  { id: 'revenant', name: 'Revenant', price: 1900, tier: 'Exclusive', animated: true },
+  { id: 'paragon', name: 'Paragon', price: 1900, tier: 'Exclusive', animated: true },
+  { id: 'tide', name: 'Abyssal Tide', price: 2000, tier: 'Ultra', animated: true },
+  { id: 'ion', name: 'Ion Drive', price: 2100, tier: 'Ultra', animated: true },
+  { id: 'chroma', name: 'Chroma', price: 2400, tier: 'Mythic', animated: true },
+  { id: 'horizon', name: 'Event Horizon', price: 2400, tier: 'Mythic', animated: true }
 ];
 export const BUNDLES = [{ id: 'fireflame', name: 'FIRE FLAME', skin: 'fireflame', price: 9900, blurb: 'Every gun becomes a dragon. The knife is one of its talons.' }];
 export const COINS = { start: 500, match: 50, win: 100, kill: 10, round: 5 };

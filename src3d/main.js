@@ -385,7 +385,7 @@ function renderLocker() {
   $('#locker-title').innerHTML = `${wName(lockerWeapon).toUpperCase()} <span class="muted small">${count}/${SKINS.length} owned</span> <button class="btn" id="locker-inspect">Inspect</button>`;
   $('#locker-skins').innerHTML = SKINS.map(k => {
     const have = owns(lockerWeapon, k.id);
-    return `<button class="ls ${k.id === eq ? 'eq' : ''} ${have ? '' : 'locked'}" data-k="${k.id}" ${have ? '' : 'disabled'}><span>${k.name}${animTag(k)}</span><span class="tag" style="color:${have ? TIER_COL[k.tier] : 'var(--muted)'}">${k.id === eq ? 'EQUIPPED' : have ? k.tier.toUpperCase() : 'IN STORE'}</span></button>`;
+    return `<button class="ls ${k.id === eq ? 'eq' : ''} ${have ? '' : 'locked'}" data-k="${k.id}" ${have ? '' : 'disabled'}><span>${k.name}${animTag(k)}</span><span class="tag" style="color:${have ? TIER_COL[k.tier] : 'var(--muted)'}">${k.id === eq ? 'EQUIPPED' : have ? k.tier.toUpperCase() : k.bundle ? 'BUNDLE' : 'IN STORE'}</span></button>`;
   }).join('');
   stage.showGun(lockerWeapon, eq);
   stage.setMode('gun');

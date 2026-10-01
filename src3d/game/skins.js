@@ -123,8 +123,166 @@ const TEX = {
   galaxyStars: () => tex((x, S) => {
     x.fillStyle = '#000'; x.fillRect(0, 0, S, S);
     for (let i = 0; i < 220; i++) { const b = 150 + rnd() * 105; x.fillStyle = `rgb(${b},${b},255)`; x.fillRect(rnd() * S, rnd() * S, rnd() < 0.1 ? 2 : 1, rnd() < 0.1 ? 2 : 1); }
-  })
+  }),
+  // ---- Valorant-inspired lines (original designs)
+  // Revenant: blackened steel with silver filigree, a soul glow in the seams
+  revenant: () => tex((x, S) => {
+    const g = x.createLinearGradient(0, 0, S, S);
+    g.addColorStop(0, '#1d1e24'); g.addColorStop(0.5, '#121318'); g.addColorStop(1, '#1b1c22');
+    x.fillStyle = g; x.fillRect(0, 0, S, S);
+    x.strokeStyle = '#07080a'; x.lineWidth = 3;
+    for (let y = 0; y <= S; y += 64) { x.beginPath(); x.moveTo(0, y); x.lineTo(S, y); x.stroke(); }
+    x.strokeStyle = 'rgba(176,180,192,0.75)'; x.lineWidth = 1.6;
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
+      const cx = i * 64 + 32, cy = j * 64 + 32, f = (i + j) % 2 ? 1 : -1;
+      x.beginPath(); x.moveTo(cx - 26, cy + 10);
+      x.bezierCurveTo(cx - 10, cy - 22 * f, cx + 8, cy + 18 * f, cx + 26, cy - 8);
+      x.stroke();
+      x.beginPath(); x.arc(cx - 26, cy + 10, 4, 0, Math.PI * 1.6); x.stroke();
+      x.beginPath(); x.arc(cx + 26, cy - 8, 4, Math.PI, Math.PI * 2.6); x.stroke();
+    }
+    x.fillStyle = '#8a8d96';
+    for (let i = 0; i < 4; i++) for (const y of [6, 58]) { x.beginPath(); x.arc(i * 64 + 32, y + Math.floor(i / 2) * 0, 2, 0, 7); x.fill(); }
+  }),
+  revenantGlow: () => tex((x, S) => {
+    x.fillStyle = '#000'; x.fillRect(0, 0, S, S);
+    x.strokeStyle = '#ff1f5a'; x.lineWidth = 2;
+    for (let y = 0; y <= S; y += 64) { x.beginPath(); x.moveTo(0, y + 2); x.lineTo(S, y + 2); x.stroke(); }
+    x.fillStyle = '#c21cff';
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { x.beginPath(); x.arc(i * 64 + 6, j * 64 + 42, 2.5, 0, 7); x.fill(); x.beginPath(); x.arc(i * 64 + 58, j * 64 + 24, 2.5, 0, 7); x.fill(); }
+  }),
+  // Paragon: ivory armor plates with gold pinstripes and cyan light strips
+  paragon: () => tex((x, S) => {
+    x.fillStyle = '#d6cfbd'; x.fillRect(0, 0, S, S);
+    for (let i = 0; i < 900; i++) { const v = 215 + rnd() * 25; x.fillStyle = `rgba(${v},${v - 6},${v - 18},0.5)`; x.fillRect(rnd() * S, rnd() * S, 2, 2); }
+    x.strokeStyle = '#b9b2a2'; x.lineWidth = 2;
+    for (let y = 0; y <= S; y += 64) { x.beginPath(); x.moveTo(0, y); x.lineTo(S, y); x.stroke(); }
+    for (let i = 0; i < 4; i++) { x.beginPath(); x.moveTo(i * 64 + 40, 0); x.lineTo(i * 64 + 40, 64); x.stroke(); x.beginPath(); x.moveTo(i * 64 + 12, 128); x.lineTo(i * 64 + 12, 192); x.stroke(); }
+    x.strokeStyle = '#c9a54a'; x.lineWidth = 3;
+    for (let y = 22; y < S; y += 64) { x.beginPath(); x.moveTo(0, y); x.lineTo(S, y); x.stroke(); }
+    x.lineWidth = 2;
+    for (let i = 0; i < S; i += 32) { x.beginPath(); x.moveTo(i, 40); x.lineTo(i + 16, 50); x.lineTo(i + 32, 40); x.stroke(); }
+  }),
+  paragonGlow: () => tex((x, S) => {
+    x.fillStyle = '#000'; x.fillRect(0, 0, S, S);
+    x.fillStyle = '#4ff0ff';
+    for (let y = 30; y < S; y += 64) x.fillRect(0, y, S, 3);
+    for (let i = 0; i < S; i += 32) x.fillRect(i + 12, 92, 8, 8);
+  }),
+  // Hannya: red lacquer mended with gold seams
+  hannya: () => tex((x, S) => {
+    const g = x.createLinearGradient(0, 0, 0, S);
+    g.addColorStop(0, '#a3121a'); g.addColorStop(0.45, '#7a0b12'); g.addColorStop(0.55, '#c0242a'); g.addColorStop(1, '#5c070c');
+    x.fillStyle = g; x.fillRect(0, 0, S, S);
+    x.fillStyle = 'rgba(0,0,0,0.85)';
+    for (let i = 0; i < 4; i++) { const cx = i * 64 + 32, cy = 200; x.beginPath(); x.arc(cx, cy, 18, Math.PI, 0); x.arc(cx + 9, cy, 9, 0, Math.PI); x.arc(cx - 9, cy, 9, 0, Math.PI, true); x.fill(); }
+    x.strokeStyle = '#e8b84a'; x.lineWidth = 2.4;
+    hannyaCracks(S).forEach(path => { x.beginPath(); path.forEach(([px, py], k) => (k ? x.lineTo(px, py) : x.moveTo(px, py))); x.stroke(); });
+  }),
+  hannyaGlow: () => tex((x, S) => {
+    x.fillStyle = '#000'; x.fillRect(0, 0, S, S);
+    x.strokeStyle = '#ff9a2a'; x.lineWidth = 2;
+    hannyaCracks(S).forEach(path => { x.beginPath(); path.forEach(([px, py], k) => (k ? x.lineTo(px, py) : x.moveTo(px, py))); x.stroke(); });
+  }),
+  // Ion Drive: white composite with angular blue energy circuits
+  ion: () => tex((x, S) => {
+    x.fillStyle = '#c9d0d9'; x.fillRect(0, 0, S, S);
+    x.fillStyle = '#b3bcc7';
+    for (let i = 0; i < 4; i++) { x.beginPath(); x.moveTo(i * 64, 0); x.lineTo(i * 64 + 40, 0); x.lineTo(i * 64 + 64, 32); x.lineTo(i * 64 + 24, 32); x.fill(); }
+    x.strokeStyle = '#b9c2cd'; x.lineWidth = 2;
+    for (const [a, b, c, d] of ionCircuit(S)) { x.beginPath(); x.moveTo(a, b); x.lineTo(c, d); x.stroke(); }
+    x.fillStyle = '#23262c'; x.fillRect(0, 120, S, 16);
+  }),
+  ionGlow: () => tex((x, S) => {
+    x.fillStyle = '#000'; x.fillRect(0, 0, S, S);
+    x.strokeStyle = '#3aa8ff'; x.lineWidth = 2.5;
+    for (const [a, b, c, d] of ionCircuit(S)) { x.beginPath(); x.moveTo(a, b); x.lineTo(c, d); x.stroke(); }
+    x.fillStyle = '#7fe0ff'; x.fillRect(0, 126, S, 4);
+  }),
+  // Chroma: dark alloy with light strips the shader runs through the whole spectrum
+  chroma: () => tex((x, S) => {
+    x.fillStyle = '#16171c'; x.fillRect(0, 0, S, S);
+    x.fillStyle = '#1f2128';
+    for (let i = -S; i < S * 2; i += 48) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i + 24, 0); x.lineTo(i + 24 + S * 0.5, S); x.lineTo(i + S * 0.5, S); x.fill(); }
+    x.fillStyle = '#0c0d10';
+    for (let y = 0; y < S; y += 64) x.fillRect(0, y, S, 6);
+  }),
+  chromaGlow: () => tex((x, S) => {
+    x.fillStyle = '#000'; x.fillRect(0, 0, S, S);
+    x.fillStyle = '#fff';
+    for (let y = 0; y < S; y += 64) x.fillRect(0, y + 2, S, 2);
+    x.strokeStyle = '#fff'; x.lineWidth = 2;
+    for (let i = 0; i < S; i += 64) { x.beginPath(); x.moveTo(i + 8, 40); x.lineTo(i + 32, 24); x.lineTo(i + 56, 40); x.stroke(); }
+  }),
+  // Event Horizon: near-black void with a few hard stars; the shader adds the spiral
+  horizon: () => tex((x, S) => {
+    const g = x.createRadialGradient(S * 0.5, S * 0.5, 4, S * 0.5, S * 0.5, S * 0.75);
+    g.addColorStop(0, '#1a0a2e'); g.addColorStop(0.6, '#0a0614'); g.addColorStop(1, '#040208');
+    x.fillStyle = g; x.fillRect(0, 0, S, S);
+    for (let i = 0; i < 4; i++) { const n = x.createRadialGradient(rnd() * S, rnd() * S, 0, rnd() * S, rnd() * S, 50 + rnd() * 50); n.addColorStop(0, 'rgba(120,40,200,0.25)'); n.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = n; x.fillRect(0, 0, S, S); }
+  }),
+  horizonStars: () => tex((x, S) => {
+    x.fillStyle = '#000'; x.fillRect(0, 0, S, S);
+    for (let i = 0; i < 140; i++) { const b = 170 + rnd() * 85; x.fillStyle = rnd() < 0.3 ? `rgb(${b},${b * 0.6},255)` : `rgb(${b},${b},${b})`; x.fillRect(rnd() * S, rnd() * S, rnd() < 0.12 ? 2 : 1, rnd() < 0.12 ? 2 : 1); }
+  }),
+  // Abyssal Tide: black lacquer with overlapping wave scales in deep blue
+  tide: () => tex((x, S) => {
+    x.fillStyle = '#0a0d14'; x.fillRect(0, 0, S, S);
+    seigaiha(x, S, (k) => `rgba(${30 + k * 6},${50 + k * 10},${90 + k * 18},0.9)`, 1.6);
+  }),
+  tideGlow: () => tex((x, S) => {
+    x.fillStyle = '#000'; x.fillRect(0, 0, S, S);
+    seigaiha(x, S, (k) => (k === 0 ? 'rgba(60,150,255,0.95)' : 'rgba(0,0,0,0)'), 2);
+  }),
+  // Arcade: pastel 8-bit pixels
+  arcade: () => tex((x, S) => {
+    const P = 16, cols = ['#4fb3a6', '#e8749a', '#e8b84f', '#8466e0', '#e3d6b4'];
+    x.fillStyle = '#e3d6b4'; x.fillRect(0, 0, S, S);
+    for (let j = 0; j < S / P; j++) for (let i = 0; i < S / P; i++) if (rnd() < 0.42) { x.fillStyle = cols[Math.floor(rnd() * 4)]; x.fillRect(i * P, j * P, P, P); }
+    const heart = ['.XX.XX.', 'XXXXXXX', 'XXXXXXX', '.XXXXX.', '..XXX..', '...X...'];
+    for (const [ox, oy] of [[16, 16], [144, 112], [64, 192]]) heart.forEach((row, r) => [...row].forEach((ch, c) => { if (ch === 'X') { x.fillStyle = '#e8336b'; x.fillRect(ox + c * 4, oy + r * 4, 4, 4); } }));
+    x.strokeStyle = 'rgba(0,0,0,0.12)'; x.lineWidth = 1;
+    for (let i = 0; i <= S; i += P) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i, S); x.stroke(); x.beginPath(); x.moveTo(0, i); x.lineTo(S, i); x.stroke(); }
+  }, 256, 1)
 };
+// Gold kintsugi seams for Hannya (same paths in the color map and the glow map)
+let crackCache = null;
+function hannyaCracks(S) {
+  if (crackCache) return crackCache;
+  let cs = 777; const r = () => ((cs = (cs * 16807) % 2147483647) / 2147483647);
+  const paths = [];
+  for (let i = 0; i < 7; i++) {
+    let px = r() * S, py = r() * S; const path = [[px, py]];
+    let a = r() * Math.PI * 2;
+    for (let k = 0; k < 9; k++) {
+      a += (r() - 0.5) * 1.2; px += Math.cos(a) * (10 + r() * 16); py += Math.sin(a) * (10 + r() * 16); path.push([px, py]);
+      if (r() < 0.25) { const b = a + (r() < 0.5 ? 1 : -1) * (0.8 + r() * 0.6); paths.push([[px, py], [px + Math.cos(b) * 18, py + Math.sin(b) * 18], [px + Math.cos(b) * 30 + 6, py + Math.sin(b) * 30]]); }
+    }
+    paths.push(path);
+  }
+  return (crackCache = paths);
+}
+// Angular circuit traces for Ion Drive
+function ionCircuit(S) {
+  const segs = [];
+  for (let i = 0; i < 4; i++) {
+    const x0 = i * 64 + 8;
+    segs.push([x0, 48, x0 + 24, 48], [x0 + 24, 48, x0 + 40, 64], [x0 + 40, 64, x0 + 56, 64]);
+    segs.push([x0, 176, x0 + 16, 160], [x0 + 16, 160, x0 + 48, 160], [x0 + 48, 160, x0 + 56, 168]);
+    segs.push([x0 + 30, 200, x0 + 30, 240], [x0 + 30, 240, x0 + 50, 240]);
+  }
+  return segs;
+}
+// Overlapping wave scales (seigaiha); color(k) styles the k-th ring counting from the outside
+function seigaiha(x, S, color, lw) {
+  const R = 32;
+  for (let j = 0; j <= S / (R / 2) + 1; j++) for (let i = -1; i <= S / R + 1; i++) {
+    const cx = i * R + (j % 2) * R / 2, cy = j * R / 2;
+    x.fillStyle = '#0a0d14'; x.beginPath(); x.arc(cx, cy, R / 2, Math.PI, 0); x.fill();
+    for (let k = 0; k < 4; k++) { x.strokeStyle = color(k); x.lineWidth = lw; x.beginPath(); x.arc(cx, cy, R / 2 - k * 4 - 1, Math.PI, 0); x.stroke(); }
+  }
+}
+
 // Surface detail shared by every skin (bump maps only, so skin colors and patterns are untouched):
 //   panel   engraved panel border, rivets and scratches (receivers, bodies)
 //   grain   fine brushed-metal grain (metal parts, accents)
@@ -202,6 +360,43 @@ const ANIM_GLSL = {
     float w = 0.5 + 0.5 * sin(vAPos.z * 38.0 - uTime * 3.2 + sin(vAPos.y * 55.0 + uTime * 1.7) * 1.4);
     totalEmissiveRadiance *= (0.25 + 1.6 * w) * (1.0 + uBurst * 3.0);
     totalEmissiveRadiance += vec3(1.0, 0.32, 0.03) * pow(max(0.0, sin(vAPos.z * 18.0 - uTime * 5.0)), 16.0) * (0.6 + uBurst * 2.0);`,
+  // Revenant: a slow soul pulse runs down the seams, with a faint flicker
+  soul: `
+    float w = pow(0.5 + 0.5 * sin(vAPos.z * 14.0 - uTime * 2.2), 4.0);
+    float flick = 0.85 + 0.15 * sin(uTime * 17.0 + vAPos.y * 40.0);
+    totalEmissiveRadiance *= (0.3 + 1.8 * w) * flick * (1.0 + uBurst * 2.5);
+    totalEmissiveRadiance += vec3(0.5, 0.02, 0.2) * w * 0.12 * (1.0 + uBurst * 4.0);`,
+  // Paragon: a bright scan travels along the light strips
+  scan: `
+    float b = pow(0.5 + 0.5 * sin(dot(vAPos, vec3(0.15, 0.35, 1.0)) * 9.0 - uTime * 3.5), 14.0);
+    totalEmissiveRadiance *= 0.55 + 2.4 * b + uBurst * 2.0;`,
+  // Ion Drive: fast energy pulses through the circuits, with sparks jumping off them
+  ion: `
+    float lit = step(0.04, dot(totalEmissiveRadiance, vec3(0.333)));
+    float b = pow(0.5 + 0.5 * sin(dot(vAPos, vec3(0.2, 0.3, 1.0)) * 12.0 - uTime * 6.0), 10.0);
+    vec3 cell = floor(vAPos * 60.0);
+    float h = fract(sin(dot(cell + floor(uTime * 12.0), vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+    totalEmissiveRadiance *= 0.6 + 2.6 * b + uBurst * 2.0;
+    totalEmissiveRadiance += vec3(0.35, 0.75, 1.0) * step(0.97 - 0.05 * uBurst, h) * lit * 2.0;`,
+  // Chroma: light strips cycle through every color, flowing along the gun
+  chroma: `
+    float hue = vAPos.z * 3.0 + vAPos.y * 2.0 - uTime * 0.35;
+    vec3 hc = 0.5 + 0.5 * cos(6.28318 * (hue + vec3(0.0, 0.33, 0.67)));
+    totalEmissiveRadiance = hc * dot(totalEmissiveRadiance, vec3(0.3333)) * (1.5 + uBurst * 3.0);`,
+  // Event Horizon: a spiral of violet light winds into the middle of the gun while the stars twinkle
+  vortex: `
+    vec2 d = vAPos.zy - vec2(-0.05, 0.0);
+    float r = length(d), a = atan(d.y, d.x);
+    float arms = pow(0.5 + 0.5 * sin(a * 3.0 - log(r + 0.02) * 6.0 + uTime * 2.5), 6.0);
+    float fade = smoothstep(0.02, 0.07, r) * (1.0 - smoothstep(0.25, 0.6, r));
+    totalEmissiveRadiance *= 0.6 + 0.5 * sin(uTime * 3.0 + vAPos.z * 90.0);
+    totalEmissiveRadiance += mix(vec3(0.4, 0.08, 1.0), vec3(1.0, 0.35, 0.85), arms) * arms * fade * (0.9 + uBurst * 3.0);`,
+  // Abyssal Tide: wave crests shimmer across the scales
+  tide: `
+    float w = sin(vAPos.z * 30.0 + sin(vAPos.y * 26.0 + uTime * 1.3) * 1.8 - uTime * 2.2);
+    float crest = smoothstep(0.55, 1.0, w);
+    totalEmissiveRadiance *= 0.35 + 1.5 * crest + uBurst * 2.0;
+    totalEmissiveRadiance += vec3(0.05, 0.3, 0.85) * crest * 0.12 * (1.0 + uBurst * 3.0);`,
   // Flames licking up the sides
   inferno: `
     vec3 q = vAPos * 16.0;
@@ -277,6 +472,30 @@ export function skinMats(skin = 'default', accent = 0xff8800) {
       break;
     case 'inferno':
       m = { body: animate(M({ color: 0x1c0d08, metalness: 0.45, roughness: 0.4 }), 'inferno'), metal: M({ color: 0x3a2a22, metalness: 0.9, roughness: 0.3 }), polymer: M({ color: 0x120806, metalness: 0.2, roughness: 0.55 }), accent: animate(M({ color: 0x2a1208, metalness: 0.8, roughness: 0.25 }), 'inferno'), glow: glow(0xff6a10) };
+      break;
+    case 'revenant':
+      m = { body: animate(M({ map: T('revenant'), metalness: 0.75, roughness: 0.3, emissiveMap: T('revenantGlow'), emissive: 0xffffff, emissiveIntensity: 1.6 }), 'soul'), metal: M({ color: 0xb4b8c4, metalness: 1, roughness: 0.18 }), polymer: M({ color: 0x0d0e12, metalness: 0.3, roughness: 0.5 }), accent: M({ color: 0x111111, emissive: 0xff1f5a, emissiveIntensity: 2 }), glow: glow(0xc21cff) };
+      break;
+    case 'paragon':
+      m = { body: animate(M({ map: T('paragon'), metalness: 0.2, roughness: 0.45, emissiveMap: T('paragonGlow'), emissive: 0xffffff, emissiveIntensity: 1.4 }), 'scan'), metal: M({ color: 0xd9b45a, metalness: 1, roughness: 0.16 }), polymer: M({ color: 0x2a2620, metalness: 0.2, roughness: 0.5 }), accent: M({ color: 0xe7c46a, metalness: 1, roughness: 0.14 }), glow: glow(0x4ff0ff) };
+      break;
+    case 'hannya':
+      m = { body: M({ map: T('hannya'), metalness: 0.15, roughness: 0.16, emissiveMap: T('hannyaGlow'), emissive: 0xffffff, emissiveIntensity: 0.45 }), metal: M({ color: 0x1a1214, metalness: 0.8, roughness: 0.25 }), polymer: M({ color: 0x0c0809, metalness: 0.15, roughness: 0.2 }), accent: M({ color: 0xe8b84a, metalness: 1, roughness: 0.18 }), glow: glow(0xff3a2a) };
+      break;
+    case 'ion':
+      m = { body: animate(M({ map: T('ion'), metalness: 0.15, roughness: 0.5, emissiveMap: T('ionGlow'), emissive: 0xffffff, emissiveIntensity: 1.5 }), 'ion'), metal: M({ color: 0x2a2f38, metalness: 0.9, roughness: 0.25 }), polymer: M({ color: 0xaeb7c2, metalness: 0.1, roughness: 0.55 }), accent: M({ color: 0x111111, emissive: 0x3aa8ff, emissiveIntensity: 2.4 }), glow: glow(0x7fe0ff) };
+      break;
+    case 'chroma':
+      m = { body: animate(M({ map: T('chroma'), metalness: 0.7, roughness: 0.26, emissiveMap: T('chromaGlow'), emissive: 0xffffff, emissiveIntensity: 1 }), 'chroma'), metal: M({ color: 0x2c2f36, metalness: 1, roughness: 0.2 }), polymer: M({ color: 0x0f1013, metalness: 0.3, roughness: 0.45 }), accent: animate(M({ color: 0x111111, emissive: 0xffffff, emissiveIntensity: 1 }), 'chroma'), glow: animate(M({ color: 0x111111, emissive: 0xffffff, emissiveIntensity: 1.2 }), 'chroma') };
+      break;
+    case 'horizon':
+      m = { body: animate(M({ map: T('horizon'), metalness: 0.5, roughness: 0.22, emissiveMap: T('horizonStars'), emissive: 0xffffff, emissiveIntensity: 1.6 }), 'vortex'), metal: M({ color: 0x2a1f3a, metalness: 1, roughness: 0.15 }), polymer: M({ map: T('horizon'), metalness: 0.2, roughness: 0.4, emissiveMap: T('horizonStars'), emissive: 0xffffff, emissiveIntensity: 1.1 }), accent: M({ color: 0x111111, emissive: 0x9a3cff, emissiveIntensity: 2.2 }), glow: glow(0xff5ad8) };
+      break;
+    case 'tide':
+      m = { body: animate(M({ map: T('tide'), metalness: 0.4, roughness: 0.2, emissiveMap: T('tideGlow'), emissive: 0xffffff, emissiveIntensity: 1.3 }), 'tide'), metal: M({ color: 0x1c2434, metalness: 1, roughness: 0.2 }), polymer: M({ color: 0x080a10, metalness: 0.2, roughness: 0.3 }), accent: M({ color: 0x9fb4d8, metalness: 1, roughness: 0.15 }), glow: glow(0x2a8cff) };
+      break;
+    case 'arcade':
+      m = { body: M({ map: T('arcade'), metalness: 0.05, roughness: 0.65 }), metal: M({ color: 0xcfc3a2, metalness: 0.1, roughness: 0.6 }), polymer: M({ color: 0x4fb3a6, metalness: 0.05, roughness: 0.65 }), accent: M({ color: 0xe8749a, metalness: 0.05, roughness: 0.5 }), glow: glow(0xff5aa0) };
       break;
     default:
       m = { body: M({ color: 0x474e58, metalness: 0.7, roughness: 0.34 }), metal: M({ color: 0x9aa2ac, metalness: 0.95, roughness: 0.2 }), polymer: M({ color: 0x24282e, metalness: 0.08, roughness: 0.72 }), accent: M({ color: accent, metalness: 0.35, roughness: 0.32 }), glow: glow(accent) };
