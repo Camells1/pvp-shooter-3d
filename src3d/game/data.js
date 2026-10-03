@@ -1,6 +1,6 @@
 // Characters, abilities, weapons, shields, skins, economy. Distances are meters, times are seconds.
 
-export const VERSION = '2.7.1';
+export const VERSION = '2.7.2';
 
 // Developer accounts (Riftline IDs, name#TAG) own every skin for free while signed in
 export const DEV_IDS = ['CAT#CAT'];

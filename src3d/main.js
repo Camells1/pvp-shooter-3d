@@ -10,6 +10,7 @@ import { BuyMenu } from './ui/buy.js';
 import { PointerLock } from './ui/pointer.js';
 import { PeerConnection } from './net/PeerConnection.js';
 import { account } from './net/account.js';
+import { clean as cleanWords, ok as nameOk } from './filter.js';
 import { sfx, setVolume, unlock } from './audio.js';
 
 const $ = s => document.querySelector(s);
@@ -24,6 +25,8 @@ $('#version').textContent = 'v' + VERSION;
 // ---------------------------------------------------------------- settings + profile
 const DEFAULTS = { name: 'Player', tag: '', account: false, sensitivity: 1, fov: 90, volume: 0.6, invertY: false, quality: 'medium', camera: 'first', char: 'blaze', map: 0, rounds: 5, difficulty: 'normal', mode: '1v1', game: 'spike' };
 const settings = { ...DEFAULTS };
+// First run in a browser on a Chromebook or a low-power device: start on Low graphics
+if (!localStorage.getItem('riftline-settings') && !navigator.userAgent.includes('Electron') && (/CrOS/.test(navigator.userAgent) || (navigator.hardwareConcurrency || 8) <= 4)) settings.quality = 'low';
 try { Object.assign(settings, JSON.parse(localStorage.getItem('riftline-settings') || '{}')); } catch (_) {}
 if (!CHARACTERS.some(c => c.id === settings.char)) settings.char = 'blaze';
 if (!MAPS.some(m => m.id === settings.map)) settings.map = 0;
@@ -32,7 +35,7 @@ const save = () => { try { localStorage.setItem('riftline-settings', JSON.string
 const TAG_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const randomTag = () => Array.from({ length: 4 }, () => TAG_CHARS[Math.floor(Math.random() * TAG_CHARS.length)]).join('');
 const cleanTag = t => String(t || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
-const cleanName = n => String(n || '').replace(/[^\p{L}\p{N} _.-]/gu, '').replace(/\s+/g, ' ').trim().slice(0, 14);
+const cleanName = n => cleanWords(String(n || '').replace(/[^\p{L}\p{N} _.-]/gu, '').replace(/\s+/g, ' ').trim().slice(0, 14));
 if (!cleanTag(settings.tag)) settings.tag = randomTag();
 setVolume(settings.volume);
 
@@ -152,10 +155,21 @@ function refreshShops() {
   if (app.screen === 'store') renderStore();
   if (app.screen === 'locker') renderLocker();
 }
+// Browser version (Chromebooks etc.): the account page opens as a pop-up and sends the session back
+const ACCOUNT_SITE = 'https://camells1.github.io';
+function webLogin() {
+  return new Promise(resolve => {
+    const w = window.open(ACCOUNT_SITE + '/account/?app=riftline', 'camel-login', 'popup,width=480,height=760');
+    if (!w) { toast('Allow pop-ups for this site to log in.'); return resolve(null); }
+    const onMsg = e => { if (e.origin === ACCOUNT_SITE && e.data?.type === 'camel-auth') done(e.data.data); };
+    const timer = setInterval(() => { if (w.closed) done(null); }, 600);
+    function done(d) { clearInterval(timer); removeEventListener('message', onMsg); resolve(d); }
+    addEventListener('message', onMsg);
+  });
+}
 async function doLogin() {
   const api = window.electronAPI;
-  if (!api?.openLogin) { window.open('https://camells1.github.io/account/', '_blank'); return; }
-  const data = await api.openLogin();
+  const data = api?.openLogin ? await api.openLogin() : await webLogin();
   if (!data?.refreshToken) return;
   try {
     const u = await account.signIn(data);
@@ -205,6 +219,7 @@ $('#acc-save').addEventListener('click', async () => {
   const n = cleanName($('#acc-name').value), t = cleanTag($('#acc-tag').value);
   if (n.length < 3) { $('#acc-err').textContent = 'Username needs at least 3 characters.'; return; }
   if (t.length < 3) { $('#acc-err').textContent = 'Tag needs 3 to 5 letters or numbers.'; return; }
+  if (n.includes('*') || !nameOk(n) || !nameOk(t)) { $('#acc-err').textContent = "Pick a different name or tag: that one isn't allowed."; return; }
   const btn = $('#acc-save'); btn.disabled = true; $('#acc-err').textContent = 'Checking…';
   // Every username#tag belongs to one player only
   try {
